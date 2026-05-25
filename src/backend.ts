@@ -48,7 +48,6 @@ async function saveMeta(cid: string, meta: WorldMeta) {
   await spindle.storage.setJson(metaPath(cid), meta, { indent: 2 })
 }
 
-<<<<<<< HEAD
 async function characterForChat(
   chatId: string,
   userId?: string,
@@ -64,20 +63,6 @@ async function characterForChat(
     if (!cid) return null
     chatChar.set(chatId, cid)
     const c = await spindle.characters.get(cid, userId)
-=======
-async function characterForChat(chatId: string): Promise<{ id: string; name: string } | null> {
-  const cached = chatChar.get(chatId)
-  if (cached) {
-    const c = await spindle.characters.get(cached)
-    return c ? { id: c.id, name: c.name } : null
-  }
-  try {
-    const chat = await spindle.chats.get(chatId)
-    const cid = (chat as { character_id?: string } | null)?.character_id
-    if (!cid) return null
-    chatChar.set(chatId, cid)
-    const c = await spindle.characters.get(cid)
->>>>>>> 0d0f5492af4f7c407b415a3674b10b3332595c29
     return c ? { id: c.id, name: c.name } : { id: cid, name: 'the character' }
   } catch {
     return null
@@ -103,26 +88,16 @@ async function buildTranscript(chatId: string, reply: string): Promise<string> {
   return [lastUser ? `PLAYER:\n${lastUser}` : '', `\nCHARACTER:\n${reply}`].join('\n').trim()
 }
 
-<<<<<<< HEAD
 async function runAgentForChat(chatId: string, reply: string, userId?: string) {
   if (!config.enabled || !reply.trim()) return
   const char = await characterForChat(chatId, userId)
-=======
-async function runAgentForChat(chatId: string, reply: string) {
-  if (!config.enabled || !reply.trim()) return
-  const char = await characterForChat(chatId)
->>>>>>> 0d0f5492af4f7c407b415a3674b10b3332595c29
   if (!char) return
   if (running.has(char.id)) return
 
   running.add(char.id)
   try {
     const meta = await loadMeta(char.id)
-<<<<<<< HEAD
     await ensureWorldBook(meta, userId) // provision + attach the dedicated book
-=======
-    await ensureWorldBook(meta) // provision + attach the dedicated book
->>>>>>> 0d0f5492af4f7c407b415a3674b10b3332595c29
 
     const transcript = await buildTranscript(chatId, reply)
     const before = JSON.stringify(meta.entries)
@@ -132,10 +107,7 @@ async function runAgentForChat(chatId: string, reply: string) {
       maxRounds: config.maxRounds,
       directive: config.directive,
       signal,
-<<<<<<< HEAD
       userId,
-=======
->>>>>>> 0d0f5492af4f7c407b415a3674b10b3332595c29
     })
 
     await saveMeta(char.id, meta)
@@ -179,11 +151,7 @@ spindle.on('GENERATION_STARTED', (payload) => {
   ensureObserver(payload.chatId)
 })
 
-<<<<<<< HEAD
 spindle.on('GENERATION_ENDED', async (payload, userId) => {
-=======
-spindle.on('GENERATION_ENDED', async (payload) => {
->>>>>>> 0d0f5492af4f7c407b415a3674b10b3332595c29
   if (!config.enabled || !payload.chatId) return
   const chatId = payload.chatId
   if (payload.error) return dropObserver(chatId)
@@ -192,31 +160,19 @@ spindle.on('GENERATION_ENDED', async (payload) => {
   const obs = observers.get(chatId)
   const reply = (payload.content ?? obs?.content ?? '').trim()
   dropObserver(chatId)
-<<<<<<< HEAD
   await runAgentForChat(chatId, reply, userId)
 })
 
 spindle.on('GENERATION_STOPPED', async (payload, userId) => {
-=======
-  await runAgentForChat(chatId, reply)
-})
-
-spindle.on('GENERATION_STOPPED', async (payload) => {
->>>>>>> 0d0f5492af4f7c407b415a3674b10b3332595c29
   if (!config.enabled || !payload.chatId) return
   const obs = observers.get(payload.chatId)
   const reply = (payload.content ?? obs?.content ?? '').trim()
   dropObserver(payload.chatId)
-<<<<<<< HEAD
   await runAgentForChat(payload.chatId, reply, userId)
-=======
-  await runAgentForChat(payload.chatId, reply)
->>>>>>> 0d0f5492af4f7c407b415a3674b10b3332595c29
 })
 
 /* --------------------------- frontend bridge ----------------------- */
 
-<<<<<<< HEAD
 async function activeCharacter(
   payloadCid?: string,
   userId?: string,
@@ -232,31 +188,13 @@ async function activeCharacter(
 
 /** Assemble a panel-friendly snapshot from meta + live entry content. */
 async function snapshot(cid: string, userId?: string) {
-=======
-async function activeCharacter(payloadCid?: string): Promise<{ id: string; name: string } | null> {
-  if (payloadCid) {
-    const c = await spindle.characters.get(payloadCid)
-    return c ? { id: c.id, name: c.name } : null
-  }
-  const active = await spindle.chats.getActive()
-  if (!active) return null
-  return characterForChat(active.id)
-}
-
-/** Assemble a panel-friendly snapshot from meta + live entry content. */
-async function snapshot(cid: string) {
->>>>>>> 0d0f5492af4f7c407b415a3674b10b3332595c29
   const meta = await loadMeta(cid)
   const entities = []
   for (const [id, e] of Object.entries(meta.entries)) {
     let content = ''
     let keys: string[] = []
     try {
-<<<<<<< HEAD
       const entry = await spindle.world_books.entries.get(id, userId)
-=======
-      const entry = await spindle.world_books.entries.get(id)
->>>>>>> 0d0f5492af4f7c407b415a3674b10b3332595c29
       if (entry) {
         content = entry.content
         keys = entry.key
@@ -292,30 +230,18 @@ spindle.onFrontendMessage(async (payload: any, userId) => {
       break
 
     case 'get_world': {
-<<<<<<< HEAD
       const char = await activeCharacter(payload.characterId, userId)
-=======
-      const char = await activeCharacter(payload.characterId)
->>>>>>> 0d0f5492af4f7c407b415a3674b10b3332595c29
       if (!char) {
         spindle.sendToFrontend({ type: 'world', characterId: null, snapshot: null }, userId)
         break
       }
-<<<<<<< HEAD
       spindle.sendToFrontend({ type: 'world', characterName: char.name, snapshot: await snapshot(char.id, userId) }, userId)
-=======
-      spindle.sendToFrontend({ type: 'world', characterName: char.name, snapshot: await snapshot(char.id) }, userId)
->>>>>>> 0d0f5492af4f7c407b415a3674b10b3332595c29
       break
     }
 
     case 'save_entity': {
       // Operator hand-edit of an entry's content/keywords.
-<<<<<<< HEAD
       const char = await activeCharacter(payload.characterId, userId)
-=======
-      const char = await activeCharacter(payload.characterId)
->>>>>>> 0d0f5492af4f7c407b415a3674b10b3332595c29
       if (!char || !payload.entity?.id) break
       const meta = await loadMeta(char.id)
       const e = meta.entries[payload.entity.id]
@@ -325,81 +251,47 @@ spindle.onFrontendMessage(async (payload: any, userId) => {
         if (typeof payload.entity.name === 'string') {
           e.name = payload.entity.name
         }
-<<<<<<< HEAD
         if (Object.keys(patch).length) await spindle.world_books.entries.update(payload.entity.id, patch, userId)
         await saveMeta(char.id, meta)
       }
       spindle.sendToFrontend({ type: 'world', characterName: char.name, snapshot: await snapshot(char.id, userId) }, userId)
-=======
-        if (Object.keys(patch).length) await spindle.world_books.entries.update(payload.entity.id, patch)
-        await saveMeta(char.id, meta)
-      }
-      spindle.sendToFrontend({ type: 'world', characterName: char.name, snapshot: await snapshot(char.id) }, userId)
->>>>>>> 0d0f5492af4f7c407b415a3674b10b3332595c29
       break
     }
 
     case 'delete_entity': {
-<<<<<<< HEAD
       const char = await activeCharacter(payload.characterId, userId)
-=======
-      const char = await activeCharacter(payload.characterId)
->>>>>>> 0d0f5492af4f7c407b415a3674b10b3332595c29
       if (!char || !payload.id) break
       const meta = await loadMeta(char.id)
       if (meta.entries[payload.id]) {
         try {
-<<<<<<< HEAD
           await spindle.world_books.entries.delete(payload.id, userId)
-=======
-          await spindle.world_books.entries.delete(payload.id)
->>>>>>> 0d0f5492af4f7c407b415a3674b10b3332595c29
         } catch {
           /* already gone */
         }
         delete meta.entries[payload.id]
         await saveMeta(char.id, meta)
       }
-<<<<<<< HEAD
       spindle.sendToFrontend({ type: 'world', characterName: char.name, snapshot: await snapshot(char.id, userId) }, userId)
-=======
-      spindle.sendToFrontend({ type: 'world', characterName: char.name, snapshot: await snapshot(char.id) }, userId)
->>>>>>> 0d0f5492af4f7c407b415a3674b10b3332595c29
       break
     }
 
     case 'reset_world': {
       // Detach + delete our book, wipe meta. Leaves the user's own books alone.
-<<<<<<< HEAD
       const char = await activeCharacter(payload.characterId, userId)
-=======
-      const char = await activeCharacter(payload.characterId)
->>>>>>> 0d0f5492af4f7c407b415a3674b10b3332595c29
       if (!char) break
       const meta = await loadMeta(char.id)
       if (meta.worldBookId) {
         try {
-<<<<<<< HEAD
           const c = await spindle.characters.get(char.id, userId)
           const remaining = (c?.world_book_ids ?? []).filter((b) => b !== meta.worldBookId)
           await spindle.characters.update(char.id, { world_book_ids: remaining, extensions: { worldforge: {} } }, userId)
           await spindle.world_books.delete(meta.worldBookId, userId)
-=======
-          const c = await spindle.characters.get(char.id)
-          const remaining = (c?.world_book_ids ?? []).filter((b) => b !== meta.worldBookId)
-          await spindle.characters.update(char.id, { world_book_ids: remaining, extensions: { worldforge: {} } })
-          await spindle.world_books.delete(meta.worldBookId)
->>>>>>> 0d0f5492af4f7c407b415a3674b10b3332595c29
         } catch {
           /* best effort */
         }
       }
       await saveMeta(char.id, emptyMeta(char.id))
-<<<<<<< HEAD
       spindle.sendToFrontend({ type: 'world', characterName: char.name, snapshot: await snapshot(char.id, userId) }, userId)
-=======
-      spindle.sendToFrontend({ type: 'world', characterName: char.name, snapshot: await snapshot(char.id) }, userId)
->>>>>>> 0d0f5492af4f7c407b415a3674b10b3332595c29
       break
     }
   }

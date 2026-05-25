@@ -148,7 +148,6 @@ async function createEntry(
   content: string,
   aliases: string[],
   opts: { onstage?: boolean; constant?: boolean },
-<<<<<<< HEAD
   userId?: string,
 ): Promise<string> {
   const bookId = await ensureWorldBook(meta, userId)
@@ -168,22 +167,6 @@ async function createEntry(
     },
     userId,
   )
-=======
-): Promise<string> {
-  const bookId = await ensureWorldBook(meta)
-  const entry = await spindle.world_books.entries.create(bookId, {
-    key: buildKeys(name, aliases),
-    content,
-    comment: entryComment(kind, name),
-    position: POS_AT_DEPTH,
-    depth: 4,
-    constant: Boolean(opts.constant),
-    selective: false,
-    disabled: false,
-    order_value: 100,
-    priority: kind === 'lore' || kind === 'faction' ? 20 : 10,
-  })
->>>>>>> 0d0f5492af4f7c407b415a3674b10b3332595c29
   meta.entries[entry.id] = {
     kind,
     name,
@@ -194,11 +177,7 @@ async function createEntry(
   return entry.id
 }
 
-<<<<<<< HEAD
 export async function executeTool(meta: WorldMeta, name: string, args: Args, userId?: string): Promise<string> {
-=======
-export async function executeTool(meta: WorldMeta, name: string, args: Args): Promise<string> {
->>>>>>> 0d0f5492af4f7c407b415a3674b10b3332595c29
   switch (name) {
     case 'list_entities': {
       const rows = Object.entries(meta.entries).map(([id, e]) => {
@@ -215,11 +194,7 @@ export async function executeTool(meta: WorldMeta, name: string, args: Args): Pr
     }
 
     case 'read_entity': {
-<<<<<<< HEAD
       const entry = await spindle.world_books.entries.get(str(args, 'id'), userId)
-=======
-      const entry = await spindle.world_books.entries.get(str(args, 'id'))
->>>>>>> 0d0f5492af4f7c407b415a3674b10b3332595c29
       if (!entry) return `No entry ${str(args, 'id')}.`
       const e = meta.entries[entry.id]
       return JSON.stringify(
@@ -240,7 +215,6 @@ export async function executeTool(meta: WorldMeta, name: string, args: Args): Pr
       const kind = (str(args, 'kind') as EntityKind) || 'lore'
       if (!KIND_VALUES.includes(kind)) return `Invalid kind: ${str(args, 'kind')}`
       const nm = str(args, 'name')
-<<<<<<< HEAD
       const id = await createEntry(
         meta,
         kind,
@@ -250,12 +224,6 @@ export async function executeTool(meta: WorldMeta, name: string, args: Args): Pr
         { onstage: bool(args, 'onstage'), constant: bool(args, 'constant') },
         userId,
       )
-=======
-      const id = await createEntry(meta, kind, nm, str(args, 'content'), arr(args, 'aliases'), {
-        onstage: bool(args, 'onstage'),
-        constant: bool(args, 'constant'),
-      })
->>>>>>> 0d0f5492af4f7c407b415a3674b10b3332595c29
       if (kind === 'location' && !meta.currentLocation) meta.currentLocation = nm
       return `Created [${kind}] "${nm}" (${id}).`
     }
@@ -272,11 +240,7 @@ export async function executeTool(meta: WorldMeta, name: string, args: Args): Pr
         patch.comment = entryComment(e.kind, newName)
         e.name = newName
       }
-<<<<<<< HEAD
       if (Object.keys(patch).length) await spindle.world_books.entries.update(id, patch, userId)
-=======
-      if (Object.keys(patch).length) await spindle.world_books.entries.update(id, patch)
->>>>>>> 0d0f5492af4f7c407b415a3674b10b3332595c29
       if (typeof args.onstage === 'boolean' && e.kind === 'character') e.onstage = bool(args, 'onstage')
       if (typeof args.status === 'string') e.status = str(args, 'status')
       e.updatedAt = Date.now()
@@ -287,11 +251,7 @@ export async function executeTool(meta: WorldMeta, name: string, args: Args): Pr
     case 'delete_entity': {
       const id = str(args, 'id')
       if (!meta.entries[id]) return `Untracked entry ${id}.`
-<<<<<<< HEAD
       await spindle.world_books.entries.delete(id, userId)
-=======
-      await spindle.world_books.entries.delete(id)
->>>>>>> 0d0f5492af4f7c407b415a3674b10b3332595c29
       const wasLoc = meta.entries[id].kind === 'location' && meta.entries[id].name === meta.currentLocation
       delete meta.entries[id]
       if (wasLoc) meta.currentLocation = null
@@ -325,15 +285,9 @@ export async function executeTool(meta: WorldMeta, name: string, args: Args): Pr
 
       // Append the development to each participant's entry so it persists.
       for (const id of ids) {
-<<<<<<< HEAD
         const entry = await spindle.world_books.entries.get(id, userId)
         if (!entry) continue
         await spindle.world_books.entries.update(id, { content: `${entry.content}${note}` }, userId)
-=======
-        const entry = await spindle.world_books.entries.get(id)
-        if (!entry) continue
-        await spindle.world_books.entries.update(id, { content: `${entry.content}${note}` })
->>>>>>> 0d0f5492af4f7c407b415a3674b10b3332595c29
         meta.entries[id].updatedAt = Date.now()
       }
 
@@ -342,13 +296,8 @@ export async function executeTool(meta: WorldMeta, name: string, args: Args): Pr
         (k) => meta.entries[k].kind === 'event' && meta.entries[k].name === 'Off-screen developments',
       )
       if (logId) {
-<<<<<<< HEAD
         const entry = await spindle.world_books.entries.get(logId, userId)
         if (entry) await spindle.world_books.entries.update(logId, { content: `${entry.content}${note}` }, userId)
-=======
-        const entry = await spindle.world_books.entries.get(logId)
-        if (entry) await spindle.world_books.entries.update(logId, { content: `${entry.content}${note}` })
->>>>>>> 0d0f5492af4f7c407b415a3674b10b3332595c29
       } else {
         await createEntry(
           meta,
@@ -357,10 +306,7 @@ export async function executeTool(meta: WorldMeta, name: string, args: Args): Pr
           `A running ledger of what unfolds away from the player.${note}`,
           ['meanwhile', 'elsewhere'],
           { constant: false },
-<<<<<<< HEAD
           userId,
-=======
->>>>>>> 0d0f5492af4f7c407b415a3674b10b3332595c29
         )
       }
       meta.updatedAt = Date.now()
