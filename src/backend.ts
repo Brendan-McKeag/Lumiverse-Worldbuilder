@@ -99,16 +99,6 @@ async function runAgentForChat(chatId: string, reply: string, userId?: string) {
     const meta = await loadMeta(char.id)
     await ensureWorldBook(meta, userId) // provision + attach the dedicated book
 
-    // Resolve a concrete connection so the agent's generation has a provider.
-    // Prefer the user's default connection; fall back to the first available.
-    let connectionId: string | undefined
-    try {
-      const conns = await spindle.connections.list(userId)
-      connectionId = (conns.find((c) => c.is_default) ?? conns[0])?.id
-    } catch {
-      /* connections unavailable — quiet() will use the active profile */
-    }
-
     const transcript = await buildTranscript(chatId, reply)
     const before = JSON.stringify(meta.entries)
     const signal = AbortSignal.timeout(config.agentTimeoutMs)
@@ -118,7 +108,6 @@ async function runAgentForChat(chatId: string, reply: string, userId?: string) {
       directive: config.directive,
       signal,
       userId,
-      connectionId,
     })
 
     await saveMeta(char.id, meta)

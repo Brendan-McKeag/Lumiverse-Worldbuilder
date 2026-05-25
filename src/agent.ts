@@ -62,7 +62,6 @@ export async function runWorldAgent(
     directive: string
     signal?: AbortSignal
     userId?: string
-    connectionId?: string
   },
 ): Promise<AgentResult> {
   const messages: LlmMessage[] = [
@@ -85,10 +84,11 @@ export async function runWorldAgent(
   let finalNote = ''
 
   for (; rounds < opts.maxRounds; rounds++) {
-    // `quiet` uses the user's active connection profile + preset, so the agent
-    // runs on whatever provider/model the character is already configured for.
-    // We also pin an explicit connection_id when we resolved one, so the
-    // provider is never left unresolved (which surfaced as "Unknown provider:").
+    // `quiet` resolves the user's active connection profile + preset exactly the
+    // way a normal chat reply does, so the agent runs on the same provider/model
+    // the character is already configured for. We deliberately do NOT pass an
+    // explicit connection_id: doing so left the provider unresolved in this path
+    // ("Unknown provider:"), whereas letting quiet do its own resolution works.
     const res = (await spindle.generate.quiet({
       type: 'quiet',
       messages,
@@ -97,7 +97,6 @@ export async function runWorldAgent(
       reasoning: { source: 'off' },
       signal: opts.signal,
       userId: opts.userId,
-      ...(opts.connectionId ? { connection_id: opts.connectionId } : {}),
     })) as {
       content?: string
       tool_calls?: { name: string; args: Record<string, unknown>; call_id: string }[]

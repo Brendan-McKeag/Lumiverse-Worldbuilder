@@ -386,8 +386,7 @@ async function runWorldAgent(meta, protagonist, transcript, opts) {
       parameters: { temperature: 0.6 },
       reasoning: { source: "off" },
       signal: opts.signal,
-      userId: opts.userId,
-      ...opts.connectionId ? { connection_id: opts.connectionId } : {}
+      userId: opts.userId
     });
     const calls = res.tool_calls ?? [];
     if (calls.length === 0) {
@@ -485,12 +484,6 @@ async function runAgentForChat(chatId, reply, userId) {
   try {
     const meta = await loadMeta(char.id);
     await ensureWorldBook(meta, userId);
-    let connectionId;
-    try {
-      const conns = await spindle.connections.list(userId);
-      connectionId = (conns.find((c) => c.is_default) ?? conns[0])?.id;
-    } catch {
-    }
     const transcript = await buildTranscript(chatId, reply);
     const before = JSON.stringify(meta.entries);
     const signal = AbortSignal.timeout(config.agentTimeoutMs);
@@ -498,8 +491,7 @@ async function runAgentForChat(chatId, reply, userId) {
       maxRounds: config.maxRounds,
       directive: config.directive,
       signal,
-      userId,
-      connectionId
+      userId
     });
     await saveMeta(char.id, meta);
     const changed = JSON.stringify(meta.entries) !== before || result.toolCalls.length > 0;
