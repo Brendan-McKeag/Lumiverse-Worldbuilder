@@ -69,15 +69,23 @@ export function emptyMeta(characterId: string): WorldMeta {
 
 const EXT_NS = 'worldforge'
 
+<<<<<<< HEAD
 export async function ensureWorldBook(meta: WorldMeta, userId?: string): Promise<string> {
   if (meta.worldBookId) {
     // Verify it still exists; if the user deleted it, re-provision.
     const existing = await spindle.world_books.get(meta.worldBookId, userId)
+=======
+export async function ensureWorldBook(meta: WorldMeta): Promise<string> {
+  if (meta.worldBookId) {
+    // Verify it still exists; if the user deleted it, re-provision.
+    const existing = await spindle.world_books.get(meta.worldBookId)
+>>>>>>> 0d0f5492af4f7c407b415a3674b10b3332595c29
     if (existing) return meta.worldBookId
     meta.worldBookId = null
   }
 
   // Try to recover a previously-created book id from the character card.
+<<<<<<< HEAD
   const char = await spindle.characters.get(meta.characterId, userId)
   const recorded = (char?.extensions?.[EXT_NS] as { worldBookId?: string } | undefined)?.worldBookId
   if (recorded) {
@@ -85,12 +93,22 @@ export async function ensureWorldBook(meta: WorldMeta, userId?: string): Promise
     if (book) {
       meta.worldBookId = recorded
       await attachBook(meta.characterId, recorded, char?.world_book_ids ?? [], userId)
+=======
+  const char = await spindle.characters.get(meta.characterId)
+  const recorded = (char?.extensions?.[EXT_NS] as { worldBookId?: string } | undefined)?.worldBookId
+  if (recorded) {
+    const book = await spindle.world_books.get(recorded)
+    if (book) {
+      meta.worldBookId = recorded
+      await attachBook(meta.characterId, recorded, char?.world_book_ids ?? [])
+>>>>>>> 0d0f5492af4f7c407b415a3674b10b3332595c29
       return recorded
     }
   }
 
   // Create a fresh dedicated book.
   const name = char?.name ? `${char.name} — WorldForge` : 'WorldForge World'
+<<<<<<< HEAD
   const book = await spindle.world_books.create(
     {
       name,
@@ -108,12 +126,27 @@ export async function ensureWorldBook(meta: WorldMeta, userId?: string): Promise
     { extensions: { [EXT_NS]: { worldBookId: book.id } } },
     userId,
   )
+=======
+  const book = await spindle.world_books.create({
+    name,
+    description: 'Auto-managed living world for this character. Edited by the WorldForge extension.',
+    metadata: { worldforge: true },
+  })
+  meta.worldBookId = book.id
+
+  await attachBook(meta.characterId, book.id, char?.world_book_ids ?? [])
+  // Record on the card so we can recover the book across reinstalls.
+  await spindle.characters.update(meta.characterId, {
+    extensions: { [EXT_NS]: { worldBookId: book.id } },
+  })
+>>>>>>> 0d0f5492af4f7c407b415a3674b10b3332595c29
 
   spindle.log.info(`[worldforge] provisioned world book ${book.id} for character ${meta.characterId}`)
   return book.id
 }
 
 /** Attach without clobbering the user's other attached books. */
+<<<<<<< HEAD
 async function attachBook(
   characterId: string,
   bookId: string,
@@ -122,6 +155,13 @@ async function attachBook(
 ): Promise<void> {
   if (current.includes(bookId)) return
   await spindle.characters.update(characterId, { world_book_ids: [...current, bookId] }, userId)
+=======
+async function attachBook(characterId: string, bookId: string, current: string[]): Promise<void> {
+  if (current.includes(bookId)) return
+  await spindle.characters.update(characterId, {
+    world_book_ids: [...current, bookId],
+  })
+>>>>>>> 0d0f5492af4f7c407b415a3674b10b3332595c29
 }
 
 /* --------------------------- keyword helpers ----------------------- */

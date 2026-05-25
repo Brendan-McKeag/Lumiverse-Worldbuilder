@@ -57,7 +57,11 @@ export async function runWorldAgent(
   meta: WorldMeta,
   protagonist: string,
   transcript: string,
+<<<<<<< HEAD
   opts: { maxRounds: number; directive: string; signal?: AbortSignal; userId?: string },
+=======
+  opts: { maxRounds: number; directive: string; signal?: AbortSignal },
+>>>>>>> 0d0f5492af4f7c407b415a3674b10b3332595c29
 ): Promise<AgentResult> {
   const messages: LlmMessage[] = [
     { role: 'system', content: systemPrompt(protagonist, opts.directive) },
@@ -86,7 +90,10 @@ export async function runWorldAgent(
       parameters: { temperature: 0.6 },
       reasoning: { source: 'off' },
       signal: opts.signal,
+<<<<<<< HEAD
       userId: opts.userId,
+=======
+>>>>>>> 0d0f5492af4f7c407b415a3674b10b3332595c29
     })) as {
       content?: string
       tool_calls?: { name: string; args: Record<string, unknown>; call_id: string }[]
@@ -112,7 +119,11 @@ export async function runWorldAgent(
     for (const c of calls) {
       let result: string
       try {
+<<<<<<< HEAD
         result = await executeTool(meta, c.name, c.args, opts.userId)
+=======
+        result = await executeTool(meta, c.name, c.args)
+>>>>>>> 0d0f5492af4f7c407b415a3674b10b3332595c29
       } catch (err) {
         result = `Error in ${c.name}: ${String(err)}`
       }
