@@ -1,0 +1,19 @@
+{
+  "version": "1.0.0",
+  "name": "WorldForge",
+  "identifier": "worldforge",
+  "author": "Brendan-McKeag",
+  "github": "https://github.com/Brendan-McKeag/Lumiverse-Worldbuilder",
+  "homepage": "https://github.com/Brendan-McKeag/Lumiverse-Worldbuilder",
+  "description": "Gives each character a living, self-expanding world built on native World Books. After every reply an autonomous agent reveals new locations as the player travels, tracks every side character independently (advancing them even in off-screen scenes the protagonist never sees), and reorganizes lore with full Claude Code-style authority. Keyword activation reveals each 'chunk' as the player engages it. One persistent world per character.",
+  "permissions": [
+    "generation",
+    "chats",
+    "chat_mutation",
+    "characters",
+    "world_books"
+  ],
+  "entry_backend": "dist/backend.js",
+  "entry_frontend": "dist/frontend.js",
+  "minimum_lumiverse_version": "0.1.0"
+}
