@@ -1,4 +1,21 @@
 // src/world.ts
+var WF_EXT = "worldforge";
+var PROTAGONIST = "protagonist";
+function readAwareness(extensions) {
+  const wf = extensions?.[WF_EXT];
+  if (!wf || typeof wf.private !== "boolean") return null;
+  return {
+    kind: wf.kind ?? "lore",
+    private: wf.private,
+    audience: Array.isArray(wf.audience) ? wf.audience.filter((x) => typeof x === "string") : []
+  };
+}
+function isVisibleTo(aw, activeCharacterId, isProtagonist) {
+  if (!aw || !aw.private) return true;
+  if (aw.audience.includes(activeCharacterId)) return true;
+  if (isProtagonist && aw.audience.includes(PROTAGONIST)) return true;
+  return false;
+}
 var META_PREFIX = "meta/";
 var metaPath = (cid) => `${META_PREFIX}${cid}.json`;
 function emptyMeta(characterId) {
@@ -77,12 +94,12 @@ var KIND_VALUES = ["location", "character", "faction", "lore", "event"];
 var TOOL_SCHEMAS = [
   {
     name: "list_entities",
-    description: "List every entity WorldForge tracks for this character \u2014 id, kind, name, and (for characters) whether they are currently on-stage with the player. Call first to orient yourself before editing.",
+    description: "List every entity WorldForge tracks \u2014 id, kind, name, (for characters) on/off-stage, and for private knowledge its audience (who is privy to it). Call first to orient yourself. CRITICAL: a character only knows entries that are public or whose audience includes them.",
     parameters: { type: "object", properties: {}, additionalProperties: false }
   },
   {
     name: "read_entity",
-    description: "Read the full World Book entry for one entity (its content, keywords, status).",
+    description: "Read the full World Book entry for one entity (its content, keywords, privacy, and audience).",
     parameters: {
       type: "object",
       properties: { id: { type: "string" } },
@@ -92,7 +109,9 @@ var TOOL_SCHEMAS = [
   },
   {
     name: "create_entity",
-    description: 'Create a new entity as a keyword-activated World Book entry. Use kind="location" for places (reveal new ones as the player approaches), kind="character" for NPCs/side characters (each tracked independently), "faction", "lore", or "event". Provide aliases for extra activation keywords. For characters, set onstage=true only if they are present with the player right now.',
+    description: `Create a new entity as a keyword-activated World Book entry. kind="location" for places, "character" for NPCs/side characters (tracked independently), "faction", "lore", or "event".
+
+KNOWLEDGE BOUNDARY \u2014 this is important: by default an entry is PUBLIC (observable by anyone \u2014 use for places, factions, general lore, and a character's outward/public description). Set private=true for knowledge only some characters hold (what was said in a private conversation, a secret, a plan), and list exactly who is privy in \`audience\`. A private entry is hidden from any character not in its audience, so characters never "remember" things they didn't witness or weren't told. Use the literal "protagonist" token in audience for the player's character.`,
     parameters: {
       type: "object",
       properties: {
@@ -101,7 +120,13 @@ var TOOL_SCHEMAS = [
         content: { type: "string", description: "The text revealed when this entity is in play." },
         aliases: { type: "array", items: { type: "string" }, description: "Extra activation keywords." },
         onstage: { type: "boolean", description: "Characters only: present with the player now." },
-        constant: { type: "boolean", description: "Always active regardless of keywords (use rarely, e.g. core world rules)." }
+        constant: { type: "boolean", description: "Always active regardless of keywords (use rarely)." },
+        private: { type: "boolean", description: "True = gated knowledge only `audience` holds. False/omitted = public." },
+        audience: {
+          type: "array",
+          items: { type: "string" },
+          description: 'Character ids privy to this (required when private). Use "protagonist" for the player.'
+        }
       },
       required: ["kind", "name", "content"],
       additionalProperties: false
@@ -109,7 +134,7 @@ var TOOL_SCHEMAS = [
   },
   {
     name: "update_entity",
-    description: "Revise an existing entity. Only provided fields change. Use to advance a character's state, rewrite a location after it changes, or append events. You have full latitude to rewrite as the world evolves.",
+    description: "Revise an existing entity. Only provided fields change. Use to advance a character's state, rewrite a location, or append events. You can also change privacy/audience here (e.g. widen who knows a fact). Setting `audience` replaces the list; use relay_knowledge to ADD someone who was just told.",
     parameters: {
       type: "object",
       properties: {
@@ -118,9 +143,28 @@ var TOOL_SCHEMAS = [
         content: { type: "string" },
         aliases: { type: "array", items: { type: "string" } },
         onstage: { type: "boolean" },
-        status: { type: "string", description: "One-line status mirror for the operator panel." }
+        status: { type: "string", description: "One-line status mirror for the operator panel." },
+        private: { type: "boolean" },
+        audience: { type: "array", items: { type: "string" }, description: "Replaces the audience list." }
       },
       required: ["id"],
+      additionalProperties: false
+    }
+  },
+  {
+    name: "relay_knowledge",
+    description: "Record that knowledge propagated: one or more characters were TOLD about a private entry (or witnessed it), so they should now know it too. Adds the given character ids to that entry's audience. Use whenever a character informs another of something off-screen or in dialogue.",
+    parameters: {
+      type: "object",
+      properties: {
+        entry_id: { type: "string", description: "The private entry whose knowledge spread." },
+        learner_ids: {
+          type: "array",
+          items: { type: "string" },
+          description: 'Character ids who now know it (use "protagonist" for the player).'
+        }
+      },
+      required: ["entry_id", "learner_ids"],
       additionalProperties: false
     }
   },
@@ -156,15 +200,19 @@ var TOOL_SCHEMAS = [
   },
   {
     name: "offscreen_scene",
-    description: "Record something that happens OFF-SCREEN, away from the player \u2014 e.g. a one-on-one between two NPCs, a faction's move, an event elsewhere. Provide the participating entity ids and a description of what unfolds. WorldForge appends the development to each participant's entry (and an event log entry) so the world stays alive between the player's scenes. The player is NOT told about this directly.",
+    description: `Record something that happens OFF-SCREEN, away from the player \u2014 a one-on-one between NPCs, a faction's move, an event elsewhere. This creates a PRIVATE knowledge entry whose audience is exactly the participants: only they will ever know it happened, unless you later relay_knowledge to someone else. The protagonist and uninvolved characters are NOT privy. This is the mechanism that keeps characters from "remembering" scenes they were never part of.`,
     parameters: {
       type: "object",
       properties: {
-        participant_ids: { type: "array", items: { type: "string" }, description: "Entity ids involved (characters/factions/locations)." },
+        participant_ids: {
+          type: "array",
+          items: { type: "string" },
+          description: "Character ids present for the scene \u2014 these become the audience. Omit the protagonist unless they were actually there."
+        },
         summary: { type: "string", description: "What happens off-screen." },
         location_name: { type: "string", description: "Optional: where it happens." }
       },
-      required: ["summary"],
+      required: ["summary", "participant_ids"],
       additionalProperties: false
     }
   }
@@ -172,6 +220,9 @@ var TOOL_SCHEMAS = [
 var POS_AT_DEPTH = 4;
 async function createEntry(meta, kind, name, content, aliases, opts, userId) {
   const bookId = await ensureWorldBook(meta, userId);
+  const isPrivate = Boolean(opts.private);
+  const audience = isPrivate ? opts.audience ?? [] : [];
+  const awareness = { kind, private: isPrivate, audience };
   const entry = await spindle.world_books.entries.create(
     bookId,
     {
@@ -184,7 +235,8 @@ async function createEntry(meta, kind, name, content, aliases, opts, userId) {
       selective: false,
       disabled: false,
       order_value: 100,
-      priority: kind === "lore" || kind === "faction" ? 20 : 10
+      priority: kind === "lore" || kind === "faction" ? 20 : 10,
+      extensions: { [WF_EXT]: awareness }
     },
     userId
   );
@@ -192,10 +244,34 @@ async function createEntry(meta, kind, name, content, aliases, opts, userId) {
     kind,
     name,
     onstage: kind === "character" ? Boolean(opts.onstage) : void 0,
+    private: isPrivate,
+    audience,
     updatedAt: Date.now()
   };
   meta.updatedAt = Date.now();
   return entry.id;
+}
+async function setAwareness(meta, entryId, patch, userId) {
+  const m = meta.entries[entryId];
+  if (!m) return;
+  const entry = await spindle.world_books.entries.get(entryId, userId);
+  const current = entry?.extensions?.[WF_EXT] ?? {
+    kind: m.kind,
+    private: Boolean(m.private),
+    audience: m.audience ?? []
+  };
+  const next = {
+    kind: current.kind,
+    private: patch.private ?? current.private,
+    audience: patch.audience ?? current.audience
+  };
+  await spindle.world_books.entries.update(entryId, { extensions: { [WF_EXT]: next } }, userId);
+  m.private = next.private;
+  m.audience = next.audience;
+  m.updatedAt = Date.now();
+}
+function mergeAudience(existing, add) {
+  return Array.from(/* @__PURE__ */ new Set([...existing ?? [], ...add]));
 }
 async function executeTool(meta, name, args, userId) {
   switch (name) {
@@ -203,11 +279,12 @@ async function executeTool(meta, name, args, userId) {
       const rows = Object.entries(meta.entries).map(([id, e]) => {
         const presence = e.kind === "character" ? e.onstage ? " (on-stage)" : " (off-stage)" : "";
         const here = e.kind === "location" && e.name === meta.currentLocation ? " (player here)" : "";
-        return `  ${id} \u2014 [${e.kind}] ${e.name}${presence}${here}`;
+        const know = e.private ? ` [PRIVATE \u2014 known to: ${(e.audience ?? []).join(", ") || "no one yet"}]` : "";
+        return `  ${id} \u2014 [${e.kind}] ${e.name}${presence}${here}${know}`;
       });
       return [
         `Player location: ${meta.currentLocation ?? "(unset)"}`,
-        "Entities:",
+        "Entities (PRIVATE entries are only seen by characters in their audience):",
         rows.join("\n") || "  (none yet)"
       ].join("\n");
     }
@@ -221,6 +298,8 @@ async function executeTool(meta, name, args, userId) {
           kind: e?.kind,
           name: e?.name,
           onstage: e?.onstage,
+          private: e?.private ?? false,
+          audience: e?.audience ?? [],
           keys: entry.key,
           content: entry.content
         },
@@ -232,17 +311,19 @@ async function executeTool(meta, name, args, userId) {
       const kind = str(args, "kind") || "lore";
       if (!KIND_VALUES.includes(kind)) return `Invalid kind: ${str(args, "kind")}`;
       const nm = str(args, "name");
+      const isPrivate = bool(args, "private");
+      const audience = arr(args, "audience");
       const id = await createEntry(
         meta,
         kind,
         nm,
         str(args, "content"),
         arr(args, "aliases"),
-        { onstage: bool(args, "onstage"), constant: bool(args, "constant") },
+        { onstage: bool(args, "onstage"), constant: bool(args, "constant"), private: isPrivate, audience },
         userId
       );
       if (kind === "location" && !meta.currentLocation) meta.currentLocation = nm;
-      return `Created [${kind}] "${nm}" (${id}).`;
+      return `Created [${kind}] "${nm}" (${id})${isPrivate ? ` \u2014 PRIVATE, known to: ${audience.join(", ") || "no one yet"}` : ""}.`;
     }
     case "update_entity": {
       const id = str(args, "id");
@@ -257,11 +338,32 @@ async function executeTool(meta, name, args, userId) {
         e.name = newName;
       }
       if (Object.keys(patch).length) await spindle.world_books.entries.update(id, patch, userId);
+      if (typeof args.private === "boolean" || Array.isArray(args.audience)) {
+        await setAwareness(
+          meta,
+          id,
+          {
+            private: typeof args.private === "boolean" ? bool(args, "private") : void 0,
+            audience: Array.isArray(args.audience) ? arr(args, "audience") : void 0
+          },
+          userId
+        );
+      }
       if (typeof args.onstage === "boolean" && e.kind === "character") e.onstage = bool(args, "onstage");
       if (typeof args.status === "string") e.status = str(args, "status");
       e.updatedAt = Date.now();
       meta.updatedAt = Date.now();
       return `Updated ${id}.`;
+    }
+    case "relay_knowledge": {
+      const id = str(args, "entry_id");
+      const e = meta.entries[id];
+      if (!e) return `Untracked entry ${id}.`;
+      const learners = arr(args, "learner_ids");
+      if (!learners.length) return "No learner ids given.";
+      const next = mergeAudience(e.audience, learners);
+      await setAwareness(meta, id, { private: true, audience: next }, userId);
+      return `Knowledge in ${id} now also known to: ${learners.join(", ")} (full audience: ${next.join(", ")}).`;
     }
     case "delete_entity": {
       const id = str(args, "id");
@@ -291,36 +393,24 @@ async function executeTool(meta, name, args, userId) {
     case "offscreen_scene": {
       const summary = str(args, "summary");
       if (!summary) return "No summary provided.";
-      const ids = arr(args, "participant_ids").filter((id) => meta.entries[id]);
+      const participants = arr(args, "participant_ids").filter((id2) => meta.entries[id2]);
+      if (!participants.length)
+        return "offscreen_scene needs at least one known participant id (its audience).";
       const stamp = (/* @__PURE__ */ new Date()).toISOString().slice(0, 16).replace("T", " ");
-      const note = `
-
-[Off-screen, ${stamp}${str(args, "location_name") ? ` @ ${str(args, "location_name")}` : ""}] ${summary}`;
-      for (const id of ids) {
-        const entry = await spindle.world_books.entries.get(id, userId);
-        if (!entry) continue;
-        await spindle.world_books.entries.update(id, { content: `${entry.content}${note}` }, userId);
-        meta.entries[id].updatedAt = Date.now();
-      }
-      const logId = Object.keys(meta.entries).find(
-        (k) => meta.entries[k].kind === "event" && meta.entries[k].name === "Off-screen developments"
+      const where = str(args, "location_name") ? ` @ ${str(args, "location_name")}` : "";
+      const names = participants.map((id2) => meta.entries[id2].name).join(", ");
+      const keyNames = participants.map((id2) => meta.entries[id2].name);
+      const id = await createEntry(
+        meta,
+        "event",
+        `Off-screen: ${names} (${stamp})`,
+        `[Off-screen development${where}] ${summary}`,
+        keyNames,
+        { private: true, audience: participants },
+        userId
       );
-      if (logId) {
-        const entry = await spindle.world_books.entries.get(logId, userId);
-        if (entry) await spindle.world_books.entries.update(logId, { content: `${entry.content}${note}` }, userId);
-      } else {
-        await createEntry(
-          meta,
-          "event",
-          "Off-screen developments",
-          `A running ledger of what unfolds away from the player.${note}`,
-          ["meanwhile", "elsewhere"],
-          { constant: false },
-          userId
-        );
-      }
       meta.updatedAt = Date.now();
-      return `Recorded off-screen scene involving ${ids.length} tracked participant(s).`;
+      return `Recorded off-screen scene (${id}) known only to: ${names}.`;
     }
     default:
       return `Unknown tool: ${name}`;
@@ -348,6 +438,21 @@ function systemPrompt(protagonist, directive) {
     "  \u2022 Mark who is on-stage vs off-stage. Off-stage characters keep living.",
     "  \u2022 When two NPCs interact away from the player, or a faction makes a move, call",
     "    offscreen_scene with the participants so it persists and shapes later turns.",
+    "",
+    "KNOWLEDGE BOUNDARIES \u2014 critical for believability. A character must only know",
+    "what they personally witnessed or were explicitly told. Enforce this rigorously:",
+    "  \u2022 A character entity's main content is its PUBLIC face \u2014 appearance, manner,",
+    "    widely-known facts. Never write private secrets or off-screen events into it.",
+    "  \u2022 Anything learned in a specific scene is PRIVATE knowledge: record it with",
+    "    create_entity(private:true, audience:[ids of those present]) or via",
+    "    offscreen_scene (whose audience is exactly its participants).",
+    '  \u2022 Use the literal "protagonist" token in an audience when the player character',
+    "    is privy. Do NOT add the protagonist to scenes they were absent from.",
+    "  \u2022 When a character TELLS another something, call relay_knowledge to add the",
+    "    listener to that knowledge's audience \u2014 that is the ONLY way knowledge",
+    "    should spread between characters.",
+    '  \u2022 If you are tempted to write "X knows Y" where X never witnessed Y and was',
+    "    never told, stop \u2014 that is the leak this system exists to prevent.",
     "",
     "Also: update locations the player changed, record durable events, and reorganize",
     "freely (rewrite, delete, replace) as canon evolves. Keep keywords specific enough",
@@ -569,7 +674,7 @@ async function snapshot(cid, userId) {
       }
     } catch {
     }
-    entities.push({ id, kind: e.kind, name: e.name, onstage: e.onstage, status: e.status, keys, content });
+    entities.push({ id, kind: e.kind, name: e.name, onstage: e.onstage, status: e.status, private: Boolean(e.private), audience: e.audience ?? [], keys, content });
   }
   return {
     characterId: cid,
@@ -658,6 +763,24 @@ function clampInt(v, min, max) {
   if (!Number.isFinite(n)) return min;
   return Math.max(min, Math.min(max, n));
 }
+spindle.registerWorldInfoInterceptor(async (ctx) => {
+  if (!config.enabled) return;
+  const active = ctx.characterId;
+  if (!active) return;
+  const isProtagonist = true;
+  const disabled = [];
+  for (const entry of ctx.entries) {
+    const aw = readAwareness(entry.extensions);
+    if (!aw || !aw.private) continue;
+    if (!isVisibleTo(aw, active, isProtagonist)) {
+      disabled.push(entry.id);
+    }
+  }
+  if (disabled.length) {
+    spindle.log.info(`[worldforge] knowledge gate: hid ${disabled.length} private entr(ies) from ${active}`);
+  }
+  return { disabled };
+}, 50);
 (async () => {
   await loadConfig();
   spindle.log.info("[worldforge] loaded (World Books mode)");

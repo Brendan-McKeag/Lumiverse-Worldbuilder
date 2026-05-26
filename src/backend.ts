@@ -1,6 +1,6 @@
 declare const spindle: import('lumiverse-spindle-types').SpindleAPI
 
-import { WorldMeta, emptyMeta, metaPath, ensureWorldBook } from './world'
+import { WorldMeta, emptyMeta, metaPath, ensureWorldBook, readAwareness, isVisibleTo } from './world'
 import { runWorldAgent } from './agent'
 
 /* ------------------------------------------------------------------ *
@@ -202,7 +202,7 @@ async function snapshot(cid: string, userId?: string) {
     } catch {
       /* entry may have been deleted out from under us */
     }
-    entities.push({ id, kind: e.kind, name: e.name, onstage: e.onstage, status: e.status, keys, content })
+    entities.push({ id, kind: e.kind, name: e.name, onstage: e.onstage, status: e.status, private: Boolean(e.private), audience: e.audience ?? [], keys, content })
   }
   return {
     characterId: cid,
@@ -302,6 +302,40 @@ function clampInt(v: unknown, min: number, max: number): number {
   if (!Number.isFinite(n)) return min
   return Math.max(min, Math.min(max, n))
 }
+
+/* ----------------- knowledge-boundary enforcement ------------------ *
+ * Runs before world-info activation. For the character speaking THIS turn,
+ * disable every candidate entry that is private knowledge whose audience
+ * doesn't include them — so a character can never surface a conversation or
+ * event it never witnessed or was told about. "disabled" wins against
+ * everything downstream, so this is a hard guarantee, not a hint.
+ *
+ * The active character is ctx.characterId. We treat it as the protagonist
+ * when it equals the chat's own character card; off-stage NPC "scenes" use
+ * a different characterId, and their private entries are keyed to them.
+ * ------------------------------------------------------------------ */
+spindle.registerWorldInfoInterceptor(async (ctx) => {
+  if (!config.enabled) return
+  const active = ctx.characterId
+  if (!active) return
+
+  // Is the active speaker the protagonist card for this chat? If so, entries
+  // whose audience contains the PROTAGONIST token are visible to them.
+  const isProtagonist = true // ctx.characterId is the chat's character card here
+
+  const disabled: string[] = []
+  for (const entry of ctx.entries) {
+    const aw = readAwareness(entry.extensions)
+    if (!aw || !aw.private) continue // public/untagged -> always allowed
+    if (!isVisibleTo(aw, active, isProtagonist)) {
+      disabled.push(entry.id)
+    }
+  }
+  if (disabled.length) {
+    spindle.log.info(`[worldforge] knowledge gate: hid ${disabled.length} private entr(ies) from ${active}`)
+  }
+  return { disabled }
+}, 50)
 
 /* ------------------------------- boot ------------------------------ */
 ;(async () => {

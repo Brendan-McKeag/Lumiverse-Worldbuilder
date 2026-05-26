@@ -21,6 +21,64 @@ declare const spindle: import('lumiverse-spindle-types').SpindleAPI
 
 export type EntityKind = 'location' | 'character' | 'faction' | 'lore' | 'event'
 
+/* ------------------------------------------------------------------ *
+ * Knowledge boundaries (the "characters only know what they witnessed"
+ * guarantee). Each entry carries WorldForge metadata in its `extensions`
+ * field describing whether it is private knowledge and, if so, exactly
+ * which character ids are privy to it (the "audience"). A world-info
+ * interceptor reads this before activation and disables any private entry
+ * whose audience excludes the character currently in the scene — so a
+ * character can never surface knowledge it never witnessed or was told.
+ * ------------------------------------------------------------------ */
+
+export const WF_EXT = 'worldforge'
+
+/** What rides along in entry.extensions.worldforge */
+export interface EntryAwareness {
+  kind: EntityKind
+  /**
+   * true  -> private knowledge, gated by `audience`
+   * false -> public/observable; anyone may see it (locations, general lore,
+   *          a character's public-facing description)
+   */
+  private: boolean
+  /**
+   * Character ids privy to this knowledge. Empty + private === no one knows
+   * it yet (GM-only). The protagonist is referenced by the literal
+   * 'protagonist' token so it survives not knowing the card's own id.
+   */
+  audience: string[]
+}
+
+export const PROTAGONIST = 'protagonist'
+
+export function readAwareness(extensions: Record<string, unknown> | undefined): EntryAwareness | null {
+  const wf = extensions?.[WF_EXT] as Partial<EntryAwareness> | undefined
+  if (!wf || typeof wf.private !== 'boolean') return null
+  return {
+    kind: (wf.kind as EntityKind) ?? 'lore',
+    private: wf.private,
+    audience: Array.isArray(wf.audience) ? wf.audience.filter((x) => typeof x === 'string') : [],
+  }
+}
+
+/**
+ * Decide whether `characterId` (the active speaker) is allowed to see an
+ * entry. Public entries are always visible. Private entries are visible only
+ * if the character is in the audience. The protagonist token matches when the
+ * active speaker IS the protagonist card.
+ */
+export function isVisibleTo(
+  aw: EntryAwareness | null,
+  activeCharacterId: string,
+  isProtagonist: boolean,
+): boolean {
+  if (!aw || !aw.private) return true // public / untagged -> visible
+  if (aw.audience.includes(activeCharacterId)) return true
+  if (isProtagonist && aw.audience.includes(PROTAGONIST)) return true
+  return false
+}
+
 /** WorldForge's private index of the entries it manages for one character. */
 export interface WorldMeta {
   characterId: string
@@ -35,6 +93,9 @@ export interface WorldMeta {
       onstage?: boolean
       /** Free-form one-line status mirror for the panel (authoritative text lives in the entry). */
       status?: string
+      /** Mirror of the entry's audience for the panel + agent context. */
+      audience?: string[]
+      private?: boolean
       updatedAt: number
     }
   >

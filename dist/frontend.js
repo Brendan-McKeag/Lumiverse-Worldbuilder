@@ -108,6 +108,10 @@ function setup(ctx) {
           pills.push(e.onstage ? '<span class="wf-pill on">on-stage</span>' : '<span class="wf-pill off">off-stage</span>');
         if (e.kind === "location" && e.name === snap.currentLocation)
           pills.push('<span class="wf-pill here">player here</span>');
+        if (e.private)
+          pills.push(
+            `<span class="wf-pill off" title="Only these characters know this">private \xB7 ${(e.audience ?? []).join(", ") || "no one"}</span>`
+          );
         html += `<div class="wf-card ${e.id === selectedId ? "sel" : ""}" data-id="${e.id}">
           <div class="wf-row between"><strong>${esc(e.name)}</strong>${pills.join(" ")}</div>
           <div class="wf-muted">${esc((e.content || "").slice(0, 90))}${e.content.length > 90 ? "\u2026" : ""}</div>
