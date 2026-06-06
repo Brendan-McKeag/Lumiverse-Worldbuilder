@@ -106,6 +106,7 @@ export function setup(ctx: SpindleFrontendContext) {
         <div><span class="wf-muted">Agent directive (optional)</span><textarea class="wf-ta wf-dir" placeholder="e.g. Grim, low-magic tone. Keep two rival NPCs scheming off-screen."></textarea></div>
         <div class="wf-row">
           <button class="wf-btn wf-save-cfg">Save settings</button>
+          <button class="wf-btn wf-reclassify">Make all public</button>
           <button class="wf-btn danger wf-reset">Reset world</button>
         </div>
       </div>
@@ -216,6 +217,16 @@ export function setup(ctx: SpindleFrontendContext) {
       confirmLabel: 'Erase',
     })
     if (confirmed) ctx.sendToBackend({ type: 'reset_world', characterId: charId })
+  })
+  q('.wf-reclassify').addEventListener('click', async () => {
+    const { confirmed } = await ctx.ui.showConfirm({
+      title: 'Make all entries public',
+      message:
+        "Reclassify every private entry in this character's world as public. Use this if the agent over-tagged things as private and ground-truth facts are being hidden. Content is not changed.",
+      variant: 'warning',
+      confirmLabel: 'Make public',
+    })
+    if (confirmed) ctx.sendToBackend({ type: 'reclassify_all_public', characterId: charId })
   })
   q('.wf-save-cfg').addEventListener('click', () => {
     ctx.sendToBackend({

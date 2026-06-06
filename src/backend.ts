@@ -294,6 +294,44 @@ spindle.onFrontendMessage(async (payload: any, userId) => {
       spindle.sendToFrontend({ type: 'world', characterName: char.name, snapshot: await snapshot(char.id, userId) }, userId)
       break
     }
+
+    case 'reclassify_all_public': {
+      // Recovery action for worlds where the agent overzealously tagged
+      // entries as private. Walks every tracked entry and rewrites its
+      // awareness to public, leaving content untouched. New entries the
+      // agent creates afterward follow the corrected prompt rules.
+      const char = await activeCharacter(payload.characterId, userId)
+      if (!char) break
+      const meta = await loadMeta(char.id)
+      let changed = 0
+      for (const [id, e] of Object.entries(meta.entries)) {
+        if (!e.private) continue
+        try {
+          const entry = await spindle.world_books.entries.get(id, userId)
+          if (!entry) continue
+          const current = (entry.extensions?.['worldforge'] as { kind?: string } | undefined) ?? {}
+          await spindle.world_books.entries.update(
+            id,
+            { extensions: { worldforge: { kind: current.kind ?? e.kind, private: false, audience: [] } } },
+            userId,
+          )
+          e.private = false
+          e.audience = []
+          e.updatedAt = Date.now()
+          changed++
+        } catch {
+          /* skip missing entries */
+        }
+      }
+      meta.updatedAt = Date.now()
+      await saveMeta(char.id, meta)
+      spindle.log.info(`[worldforge] reclassified ${changed} entries as public for ${char.id}`)
+      spindle.sendToFrontend(
+        { type: 'world', characterName: char.name, snapshot: await snapshot(char.id, userId), note: `Reclassified ${changed} entries as public.` },
+        userId,
+      )
+      break
+    }
   }
 })
 
@@ -327,6 +365,11 @@ spindle.registerWorldInfoInterceptor(async (ctx) => {
   for (const entry of ctx.entries) {
     const aw = readAwareness(entry.extensions)
     if (!aw || !aw.private) continue // public/untagged -> always allowed
+    // Fail-open safety: a private entry with an empty audience is almost
+    // certainly a tagging mistake. Hiding it from everyone is a worse failure
+    // mode (the model confabulates around missing canon) than briefly leaking
+    // a possibly-secret entry. Treat empty audience as public.
+    if (!aw.audience || aw.audience.length === 0) continue
     if (!isVisibleTo(aw, active, isProtagonist)) {
       disabled.push(entry.id)
     }
