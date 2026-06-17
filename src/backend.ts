@@ -71,21 +71,50 @@ async function characterForChat(
 
 /* --------------------- post-turn world agent ----------------------- */
 
+// How many recent messages to feed the agent. One turn is not enough: basic
+// facts (a character's species, a place's name) are often established earlier
+// and never restated, so a single-turn window forces the agent to confabulate.
+const HISTORY_MESSAGES = 8
+
 async function buildTranscript(chatId: string, reply: string): Promise<string> {
-  let lastUser = ''
+  const lines: string[] = []
   try {
     const msgs = await spindle.chat.getMessages(chatId)
-    for (let i = msgs.length - 1; i >= 0; i--) {
-      if (msgs[i].role === 'user') {
-        lastUser =
-          typeof msgs[i].content === 'string' ? (msgs[i].content as string) : JSON.stringify(msgs[i].content)
-        break
-      }
+    for (const m of msgs.slice(-HISTORY_MESSAGES)) {
+      const text = typeof m.content === 'string' ? m.content : JSON.stringify(m.content)
+      if (!text.trim()) continue
+      lines.push(`${m.role === 'user' ? 'PLAYER' : 'CHARACTER'}:\n${text.trim()}`)
     }
   } catch {
     /* ignore */
   }
-  return [lastUser ? `PLAYER:\n${lastUser}` : '', `\nCHARACTER:\n${reply}`].join('\n').trim()
+  // Ensure the just-generated reply is the final CHARACTER turn. It may not be
+  // persisted in getMessages yet; only append it if the history doesn't end on it.
+  const r = reply.trim()
+  if (r && !(lines.length && lines[lines.length - 1].includes(r))) {
+    lines.push(`CHARACTER:\n${r}`)
+  }
+  return lines.join('\n\n').trim()
+}
+
+// The character card is the canonical source of truth for the protagonist's
+// own basic facts. The agent never sees it otherwise, which is how a deer ends
+// up recorded as a rabbit. Read whatever standard card fields are present
+// (defensively — field availability varies) and cap length to stay economical.
+function buildCardContext(char: unknown): string {
+  const c = (char ?? {}) as Record<string, unknown>
+  const cap = (s: string, n: number) => (s.length > n ? `${s.slice(0, n)}…` : s)
+  const fields: [string, unknown, number][] = [
+    ['Name', c.name, 200],
+    ['Description', c.description, 2000],
+    ['Personality', c.personality, 1000],
+    ['Scenario', c.scenario, 1000],
+    ['Opening', c.first_mes, 1500],
+  ]
+  return fields
+    .filter(([, v]) => typeof v === 'string' && (v as string).trim())
+    .map(([k, v, n]) => `${k}: ${cap((v as string).trim(), n)}`)
+    .join('\n\n')
 }
 
 async function runAgentForChat(chatId: string, reply: string, userId?: string) {
@@ -100,6 +129,8 @@ async function runAgentForChat(chatId: string, reply: string, userId?: string) {
     await ensureWorldBook(meta, userId) // provision + attach the dedicated book
 
     const transcript = await buildTranscript(chatId, reply)
+    const fullChar = await spindle.characters.get(char.id, userId).catch(() => null)
+    const cardContext = buildCardContext(fullChar)
     const before = JSON.stringify(meta.entries)
     const signal = AbortSignal.timeout(config.agentTimeoutMs)
 
@@ -108,6 +139,7 @@ async function runAgentForChat(chatId: string, reply: string, userId?: string) {
       directive: config.directive,
       signal,
       userId,
+      cardContext,
     })
 
     await saveMeta(char.id, meta)

@@ -45,7 +45,7 @@ function setup(ctx) {
   tab.root.innerHTML = `
     <div class="wf-wrap">
       <div class="wf-row between">
-        <span class="wf-muted wf-status">Loading\u2026</span>
+        <span class="wf-muted wf-status">Loading…</span>
         <button class="wf-btn wf-refresh">Refresh</button>
       </div>
       <div class="wf-list wf-entities"></div>
@@ -73,6 +73,7 @@ function setup(ctx) {
         <div><span class="wf-muted">Agent directive (optional)</span><textarea class="wf-ta wf-dir" placeholder="e.g. Grim, low-magic tone. Keep two rival NPCs scheming off-screen."></textarea></div>
         <div class="wf-row">
           <button class="wf-btn wf-save-cfg">Save settings</button>
+          <button class="wf-btn wf-reclassify">Make all public</button>
           <button class="wf-btn danger wf-reset">Reset world</button>
         </div>
       </div>
@@ -92,7 +93,7 @@ function setup(ctx) {
   const esc = (s) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
   function render() {
     if (!snap || snap.entities.length === 0) {
-      entitiesEl.innerHTML = '<span class="wf-muted">No world yet. It grows as the story moves \u2014 the agent will create locations, characters, and lore.</span>';
+      entitiesEl.innerHTML = '<span class="wf-muted">No world yet. It grows as the story moves — the agent will create locations, characters, and lore.</span>';
       detail.style.display = "none";
       return;
     }
@@ -100,7 +101,8 @@ function setup(ctx) {
     let html = "";
     for (const kind of KIND_ORDER) {
       const list = byKind(kind);
-      if (!list.length) continue;
+      if (!list.length)
+        continue;
       html += `<h4 class="wf-h">${KIND_LABEL[kind]}</h4>`;
       for (const e of list) {
         const pills = [];
@@ -109,23 +111,20 @@ function setup(ctx) {
         if (e.kind === "location" && e.name === snap.currentLocation)
           pills.push('<span class="wf-pill here">player here</span>');
         if (e.private)
-          pills.push(
-            `<span class="wf-pill off" title="Only these characters know this">private \xB7 ${(e.audience ?? []).join(", ") || "no one"}</span>`
-          );
+          pills.push(`<span class="wf-pill off" title="Only these characters know this">private · ${(e.audience ?? []).join(", ") || "no one"}</span>`);
         html += `<div class="wf-card ${e.id === selectedId ? "sel" : ""}" data-id="${e.id}">
           <div class="wf-row between"><strong>${esc(e.name)}</strong>${pills.join(" ")}</div>
-          <div class="wf-muted">${esc((e.content || "").slice(0, 90))}${e.content.length > 90 ? "\u2026" : ""}</div>
+          <div class="wf-muted">${esc((e.content || "").slice(0, 90))}${e.content.length > 90 ? "…" : ""}</div>
         </div>`;
       }
     }
     entitiesEl.innerHTML = html;
-    entitiesEl.querySelectorAll(".wf-card").forEach(
-      (el) => el.addEventListener("click", () => select(el.dataset.id))
-    );
+    entitiesEl.querySelectorAll(".wf-card").forEach((el) => el.addEventListener("click", () => select(el.dataset.id)));
   }
   function select(id) {
     const e = snap?.entities.find((x) => x.id === id);
-    if (!e) return;
+    if (!e)
+      return;
     selectedId = id;
     detail.style.display = "flex";
     dName.value = e.name;
@@ -143,7 +142,8 @@ function setup(ctx) {
   ctx.events.on("CHAT_SWITCHED", () => requestWorld());
   q(".wf-refresh").addEventListener("click", requestWorld);
   q(".wf-d-save").addEventListener("click", () => {
-    if (!selectedId) return;
+    if (!selectedId)
+      return;
     ctx.sendToBackend({
       type: "save_entity",
       characterId: charId,
@@ -151,7 +151,8 @@ function setup(ctx) {
     });
   });
   q(".wf-d-del").addEventListener("click", async () => {
-    if (!selectedId) return;
+    if (!selectedId)
+      return;
     const { confirmed } = await ctx.ui.showConfirm({
       title: "Delete entry",
       message: "Remove this entity and its World Book entry?",
@@ -171,7 +172,18 @@ function setup(ctx) {
       variant: "danger",
       confirmLabel: "Erase"
     });
-    if (confirmed) ctx.sendToBackend({ type: "reset_world", characterId: charId });
+    if (confirmed)
+      ctx.sendToBackend({ type: "reset_world", characterId: charId });
+  });
+  q(".wf-reclassify").addEventListener("click", async () => {
+    const { confirmed } = await ctx.ui.showConfirm({
+      title: "Make all entries public",
+      message: "Reclassify every private entry in this character's world as public. Use this if the agent over-tagged things as private and ground-truth facts are being hidden. Content is not changed.",
+      variant: "warning",
+      confirmLabel: "Make public"
+    });
+    if (confirmed)
+      ctx.sendToBackend({ type: "reclassify_all_public", characterId: charId });
   });
   q(".wf-save-cfg").addEventListener("click", () => {
     ctx.sendToBackend({
@@ -185,7 +197,7 @@ function setup(ctx) {
       case "world": {
         snap = p.snapshot ?? null;
         charId = snap?.characterId ?? null;
-        status.textContent = charId ? snap && snap.entities.length ? `${snap.entities.length} entities \xB7 ${p.characterName ?? ""}` : "World is empty" : "No active character";
+        status.textContent = charId ? snap && snap.entities.length ? `${snap.entities.length} entities · ${p.characterName ?? ""}` : "World is empty" : "No active character";
         if (selectedId && !snap?.entities.some((e) => e.id === selectedId)) {
           selectedId = null;
           detail.style.display = "none";
@@ -195,9 +207,9 @@ function setup(ctx) {
       }
       case "world_changed": {
         if (p.characterId === charId) {
-          activity.textContent = `Last turn: ${p.edits} edits over ${p.rounds} rounds${p.note ? ` \u2014 ${p.note}` : ""}`;
-          tab.setBadge("\u2022");
-          setTimeout(() => tab.setBadge(null), 4e3);
+          activity.textContent = `Last turn: ${p.edits} edits over ${p.rounds} rounds${p.note ? ` — ${p.note}` : ""}`;
+          tab.setBadge("•");
+          setTimeout(() => tab.setBadge(null), 4000);
           requestWorld();
         }
         break;

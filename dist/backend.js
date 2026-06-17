@@ -1,9 +1,11 @@
+// @bun
 // src/world.ts
 var WF_EXT = "worldforge";
 var PROTAGONIST = "protagonist";
 function readAwareness(extensions) {
   const wf = extensions?.[WF_EXT];
-  if (!wf || typeof wf.private !== "boolean") return null;
+  if (!wf || typeof wf.private !== "boolean")
+    return null;
   return {
     kind: wf.kind ?? "lore",
     private: wf.private,
@@ -11,9 +13,12 @@ function readAwareness(extensions) {
   };
 }
 function isVisibleTo(aw, activeCharacterId, isProtagonist) {
-  if (!aw || !aw.private) return true;
-  if (aw.audience.includes(activeCharacterId)) return true;
-  if (isProtagonist && aw.audience.includes(PROTAGONIST)) return true;
+  if (!aw || !aw.private)
+    return true;
+  if (aw.audience.includes(activeCharacterId))
+    return true;
+  if (isProtagonist && aw.audience.includes(PROTAGONIST))
+    return true;
   return false;
 }
 var META_PREFIX = "meta/";
@@ -33,7 +38,8 @@ var EXT_NS = "worldforge";
 async function ensureWorldBook(meta, userId) {
   if (meta.worldBookId) {
     const existing = await spindle.world_books.get(meta.worldBookId, userId);
-    if (existing) return meta.worldBookId;
+    if (existing)
+      return meta.worldBookId;
     meta.worldBookId = null;
   }
   const char = await spindle.characters.get(meta.characterId, userId);
@@ -47,38 +53,35 @@ async function ensureWorldBook(meta, userId) {
     }
   }
   const name = char?.name ? `${char.name} \u2014 WorldForge` : "WorldForge World";
-  const book = await spindle.world_books.create(
-    {
-      name,
-      description: "Auto-managed living world for this character. Edited by the WorldForge extension.",
-      metadata: { worldforge: true }
-    },
-    userId
-  );
+  const book = await spindle.world_books.create({
+    name,
+    description: "Auto-managed living world for this character. Edited by the WorldForge extension.",
+    metadata: { worldforge: true }
+  }, userId);
   meta.worldBookId = book.id;
   await attachBook(meta.characterId, book.id, char?.world_book_ids ?? [], userId);
-  await spindle.characters.update(
-    meta.characterId,
-    { extensions: { [EXT_NS]: { worldBookId: book.id } } },
-    userId
-  );
+  await spindle.characters.update(meta.characterId, { extensions: { [EXT_NS]: { worldBookId: book.id } } }, userId);
   spindle.log.info(`[worldforge] provisioned world book ${book.id} for character ${meta.characterId}`);
   return book.id;
 }
 async function attachBook(characterId, bookId, current, userId) {
-  if (current.includes(bookId)) return;
+  if (current.includes(bookId))
+    return;
   await spindle.characters.update(characterId, { world_book_ids: [...current, bookId] }, userId);
 }
 function buildKeys(name, aliases = []) {
-  const out = /* @__PURE__ */ new Set();
+  const out = new Set;
   const push = (s) => {
     const t = s.trim();
-    if (t.length >= 2) out.add(t);
+    if (t.length >= 2)
+      out.add(t);
   };
   push(name);
   const words = name.split(/\s+/).filter((w) => w.length >= 3 && !/^(the|a|an|of|and)$/i.test(w));
-  for (const w of words) push(w);
-  for (const a of aliases) push(a);
+  for (const w of words)
+    push(w);
+  for (const a of aliases)
+    push(a);
   return Array.from(out);
 }
 function entryComment(kind, name) {
@@ -223,27 +226,23 @@ async function createEntry(meta, kind, name, content, aliases, opts, userId) {
   const isPrivate = Boolean(opts.private);
   const audience = isPrivate ? opts.audience ?? [] : [];
   const awareness = { kind, private: isPrivate, audience };
-  const entry = await spindle.world_books.entries.create(
-    bookId,
-    {
-      key: buildKeys(name, aliases),
-      content,
-      comment: entryComment(kind, name),
-      position: POS_AT_DEPTH,
-      depth: 4,
-      constant: Boolean(opts.constant),
-      selective: false,
-      disabled: false,
-      order_value: 100,
-      priority: kind === "lore" || kind === "faction" ? 20 : 10,
-      extensions: { [WF_EXT]: awareness }
-    },
-    userId
-  );
+  const entry = await spindle.world_books.entries.create(bookId, {
+    key: buildKeys(name, aliases),
+    content,
+    comment: entryComment(kind, name),
+    position: POS_AT_DEPTH,
+    depth: 4,
+    constant: Boolean(opts.constant),
+    selective: false,
+    disabled: false,
+    order_value: 100,
+    priority: kind === "lore" || kind === "faction" ? 20 : 10,
+    extensions: { [WF_EXT]: awareness }
+  }, userId);
   meta.entries[entry.id] = {
     kind,
     name,
-    onstage: kind === "character" ? Boolean(opts.onstage) : void 0,
+    onstage: kind === "character" ? Boolean(opts.onstage) : undefined,
     private: isPrivate,
     audience,
     updatedAt: Date.now()
@@ -253,7 +252,8 @@ async function createEntry(meta, kind, name, content, aliases, opts, userId) {
 }
 async function setAwareness(meta, entryId, patch, userId) {
   const m = meta.entries[entryId];
-  if (!m) return;
+  if (!m)
+    return;
   const entry = await spindle.world_books.entries.get(entryId, userId);
   const current = entry?.extensions?.[WF_EXT] ?? {
     kind: m.kind,
@@ -271,7 +271,7 @@ async function setAwareness(meta, entryId, patch, userId) {
   m.updatedAt = Date.now();
 }
 function mergeAudience(existing, add) {
-  return Array.from(/* @__PURE__ */ new Set([...existing ?? [], ...add]));
+  return Array.from(new Set([...existing ?? [], ...add]));
 }
 async function executeTool(meta, name, args, userId) {
   switch (name) {
@@ -285,72 +285,65 @@ async function executeTool(meta, name, args, userId) {
       return [
         `Player location: ${meta.currentLocation ?? "(unset)"}`,
         "Entities (PRIVATE entries are only seen by characters in their audience):",
-        rows.join("\n") || "  (none yet)"
-      ].join("\n");
+        rows.join(`
+`) || "  (none yet)"
+      ].join(`
+`);
     }
     case "read_entity": {
       const entry = await spindle.world_books.entries.get(str(args, "id"), userId);
-      if (!entry) return `No entry ${str(args, "id")}.`;
+      if (!entry)
+        return `No entry ${str(args, "id")}.`;
       const e = meta.entries[entry.id];
-      return JSON.stringify(
-        {
-          id: entry.id,
-          kind: e?.kind,
-          name: e?.name,
-          onstage: e?.onstage,
-          private: e?.private ?? false,
-          audience: e?.audience ?? [],
-          keys: entry.key,
-          content: entry.content
-        },
-        null,
-        2
-      );
+      return JSON.stringify({
+        id: entry.id,
+        kind: e?.kind,
+        name: e?.name,
+        onstage: e?.onstage,
+        private: e?.private ?? false,
+        audience: e?.audience ?? [],
+        keys: entry.key,
+        content: entry.content
+      }, null, 2);
     }
     case "create_entity": {
       const kind = str(args, "kind") || "lore";
-      if (!KIND_VALUES.includes(kind)) return `Invalid kind: ${str(args, "kind")}`;
+      if (!KIND_VALUES.includes(kind))
+        return `Invalid kind: ${str(args, "kind")}`;
       const nm = str(args, "name");
       const isPrivate = bool(args, "private");
       const audience = arr(args, "audience");
-      const id = await createEntry(
-        meta,
-        kind,
-        nm,
-        str(args, "content"),
-        arr(args, "aliases"),
-        { onstage: bool(args, "onstage"), constant: bool(args, "constant"), private: isPrivate, audience },
-        userId
-      );
-      if (kind === "location" && !meta.currentLocation) meta.currentLocation = nm;
+      const id = await createEntry(meta, kind, nm, str(args, "content"), arr(args, "aliases"), { onstage: bool(args, "onstage"), constant: bool(args, "constant"), private: isPrivate, audience }, userId);
+      if (kind === "location" && !meta.currentLocation)
+        meta.currentLocation = nm;
       return `Created [${kind}] "${nm}" (${id})${isPrivate ? ` \u2014 PRIVATE, known to: ${audience.join(", ") || "no one yet"}` : ""}.`;
     }
     case "update_entity": {
       const id = str(args, "id");
       const e = meta.entries[id];
-      if (!e) return `Untracked entry ${id}.`;
+      if (!e)
+        return `Untracked entry ${id}.`;
       const patch = {};
-      if (typeof args.content === "string") patch.content = str(args, "content");
+      if (typeof args.content === "string")
+        patch.content = str(args, "content");
       if (typeof args.name === "string" || Array.isArray(args.aliases)) {
         const newName = typeof args.name === "string" ? str(args, "name") : e.name;
         patch.key = buildKeys(newName, arr(args, "aliases"));
         patch.comment = entryComment(e.kind, newName);
         e.name = newName;
       }
-      if (Object.keys(patch).length) await spindle.world_books.entries.update(id, patch, userId);
+      if (Object.keys(patch).length)
+        await spindle.world_books.entries.update(id, patch, userId);
       if (typeof args.private === "boolean" || Array.isArray(args.audience)) {
-        await setAwareness(
-          meta,
-          id,
-          {
-            private: typeof args.private === "boolean" ? bool(args, "private") : void 0,
-            audience: Array.isArray(args.audience) ? arr(args, "audience") : void 0
-          },
-          userId
-        );
+        await setAwareness(meta, id, {
+          private: typeof args.private === "boolean" ? bool(args, "private") : undefined,
+          audience: Array.isArray(args.audience) ? arr(args, "audience") : undefined
+        }, userId);
       }
-      if (typeof args.onstage === "boolean" && e.kind === "character") e.onstage = bool(args, "onstage");
-      if (typeof args.status === "string") e.status = str(args, "status");
+      if (typeof args.onstage === "boolean" && e.kind === "character")
+        e.onstage = bool(args, "onstage");
+      if (typeof args.status === "string")
+        e.status = str(args, "status");
       e.updatedAt = Date.now();
       meta.updatedAt = Date.now();
       return `Updated ${id}.`;
@@ -358,33 +351,39 @@ async function executeTool(meta, name, args, userId) {
     case "relay_knowledge": {
       const id = str(args, "entry_id");
       const e = meta.entries[id];
-      if (!e) return `Untracked entry ${id}.`;
+      if (!e)
+        return `Untracked entry ${id}.`;
       const learners = arr(args, "learner_ids");
-      if (!learners.length) return "No learner ids given.";
+      if (!learners.length)
+        return "No learner ids given.";
       const next = mergeAudience(e.audience, learners);
       await setAwareness(meta, id, { private: true, audience: next }, userId);
       return `Knowledge in ${id} now also known to: ${learners.join(", ")} (full audience: ${next.join(", ")}).`;
     }
     case "delete_entity": {
       const id = str(args, "id");
-      if (!meta.entries[id]) return `Untracked entry ${id}.`;
+      if (!meta.entries[id])
+        return `Untracked entry ${id}.`;
       await spindle.world_books.entries.delete(id, userId);
       const wasLoc = meta.entries[id].kind === "location" && meta.entries[id].name === meta.currentLocation;
       delete meta.entries[id];
-      if (wasLoc) meta.currentLocation = null;
+      if (wasLoc)
+        meta.currentLocation = null;
       meta.updatedAt = Date.now();
       return `Deleted ${id}.`;
     }
     case "set_player_location": {
       const e = meta.entries[str(args, "id")];
-      if (!e || e.kind !== "location") return `No location entity ${str(args, "id")}.`;
+      if (!e || e.kind !== "location")
+        return `No location entity ${str(args, "id")}.`;
       meta.currentLocation = e.name;
       meta.updatedAt = Date.now();
       return `Player is now at ${e.name}.`;
     }
     case "set_character_presence": {
       const e = meta.entries[str(args, "id")];
-      if (!e || e.kind !== "character") return `No character entity ${str(args, "id")}.`;
+      if (!e || e.kind !== "character")
+        return `No character entity ${str(args, "id")}.`;
       e.onstage = bool(args, "onstage");
       e.updatedAt = Date.now();
       meta.updatedAt = Date.now();
@@ -392,23 +391,16 @@ async function executeTool(meta, name, args, userId) {
     }
     case "offscreen_scene": {
       const summary = str(args, "summary");
-      if (!summary) return "No summary provided.";
+      if (!summary)
+        return "No summary provided.";
       const participants = arr(args, "participant_ids").filter((id2) => meta.entries[id2]);
       if (!participants.length)
         return "offscreen_scene needs at least one known participant id (its audience).";
-      const stamp = (/* @__PURE__ */ new Date()).toISOString().slice(0, 16).replace("T", " ");
+      const stamp = new Date().toISOString().slice(0, 16).replace("T", " ");
       const where = str(args, "location_name") ? ` @ ${str(args, "location_name")}` : "";
       const names = participants.map((id2) => meta.entries[id2].name).join(", ");
       const keyNames = participants.map((id2) => meta.entries[id2].name);
-      const id = await createEntry(
-        meta,
-        "event",
-        `Off-screen: ${names} (${stamp})`,
-        `[Off-screen development${where}] ${summary}`,
-        keyNames,
-        { private: true, audience: participants },
-        userId
-      );
+      const id = await createEntry(meta, "event", `Off-screen: ${names} (${stamp})`, `[Off-screen development${where}] ${summary}`, keyNames, { private: true, audience: participants }, userId);
       meta.updatedAt = Date.now();
       return `Recorded off-screen scene (${id}) known only to: ${names}.`;
     }
@@ -439,20 +431,54 @@ function systemPrompt(protagonist, directive) {
     "  \u2022 When two NPCs interact away from the player, or a faction makes a move, call",
     "    offscreen_scene with the participants so it persists and shapes later turns.",
     "",
-    "KNOWLEDGE BOUNDARIES \u2014 critical for believability. A character must only know",
-    "what they personally witnessed or were explicitly told. Enforce this rigorously:",
-    "  \u2022 A character entity's main content is its PUBLIC face \u2014 appearance, manner,",
-    "    widely-known facts. Never write private secrets or off-screen events into it.",
-    "  \u2022 Anything learned in a specific scene is PRIVATE knowledge: record it with",
-    "    create_entity(private:true, audience:[ids of those present]) or via",
-    "    offscreen_scene (whose audience is exactly its participants).",
-    '  \u2022 Use the literal "protagonist" token in an audience when the player character',
-    "    is privy. Do NOT add the protagonist to scenes they were absent from.",
-    "  \u2022 When a character TELLS another something, call relay_knowledge to add the",
-    "    listener to that knowledge's audience \u2014 that is the ONLY way knowledge",
-    "    should spread between characters.",
-    '  \u2022 If you are tempted to write "X knows Y" where X never witnessed Y and was',
-    "    never told, stop \u2014 that is the leak this system exists to prevent.",
+    "FIDELITY \u2014 never invent basic facts. This is the most important rule.",
+    "Every concrete attribute you record \u2014 species, sex, age, name, appearance,",
+    "role, relationships, location \u2014 MUST be traceable to the CHARACTER CARD or the",
+    "scene text you were given. If a fact has not been established anywhere, LEAVE",
+    "IT OUT; do not guess a plausible-sounding detail to fill the gap. A wrong",
+    '"fact" is far worse than a missing one \u2014 it becomes canon and the world drifts',
+    "away from the story (e.g. recording a deer character as a rabbit).",
+    "  \u2022 Before you revise an existing entity, call read_entity and PRESERVE what is",
+    "    already established. Change a recorded fact only when the scene explicitly",
+    "    changes it \u2014 never because you re-guessed it from a vague mention.",
+    "  \u2022 The CHARACTER CARD provided below is the source of truth for the",
+    "    protagonist's own basic traits. Copy them faithfully; never override them.",
+    "  \u2022 If the scene only implies something ambiguously, prefer to omit it or keep",
+    "    the existing value rather than commit to a guess.",
+    "",
+    "PUBLIC vs PRIVATE knowledge \u2014 get this right or the world breaks.",
+    "",
+    'The DEFAULT is PUBLIC. Public means "this is how the world is, observable by',
+    'anyone who encounters it." Almost everything you create is public:',
+    "  \u2022 LOCATIONS \u2014 public. They exist; anyone there can see them.",
+    "  \u2022 FACTIONS \u2014 public. Their existence and reputation are known.",
+    "  \u2022 LORE, HISTORY, WORLD RULES \u2014 public. Common knowledge of the setting.",
+    "  \u2022 A CHARACTER's ENTRY \u2014 public. Their name, appearance, manner, role,",
+    "    publicly-known background, and broadly-understood personality go here.",
+    "    These are the things anyone meeting them would learn. Do NOT mark a",
+    "    character entity itself as private \u2014 it is the character's public face.",
+    "",
+    "PRIVATE is the NARROW exception. Use it ONLY for specific knowledge gained",
+    "in a specific scene that not everyone has. Examples that ARE private:",
+    '  \u2022 "Vael and Orin agreed in the cellar to betray the player." (only they know)',
+    '  \u2022 "The protagonist confided to Mara that they are afraid of the king."',
+    "    (audience: protagonist + Mara)",
+    "  \u2022 A secret one character holds that others have not been told.",
+    "",
+    "When you do create something private, you MUST set a non-empty audience of",
+    'character ids who actually witnessed or were told. Use the literal "protagonist"',
+    'token for the player. An empty audience means "no one knows," which is almost',
+    "never what you want \u2014 if you find yourself with no clear audience, the thing",
+    "is probably public.",
+    "",
+    "How knowledge spreads:",
+    "  \u2022 offscreen_scene records a private development; its audience is exactly the",
+    "    participants. The protagonist is included ONLY if they were actually there.",
+    "  \u2022 When one character TELLS another a private fact, call relay_knowledge with",
+    "    the listener's id. That is the only way private knowledge legitimately spreads.",
+    "",
+    "Common mistake to avoid: marking general character traits or backstory as",
+    "private. If a fact would be in the character's public dossier \u2014 make it public.",
     "",
     "Also: update locations the player changed, record durable events, and reorganize",
     "freely (rewrite, delete, replace) as canon evolves. Keep keywords specific enough",
@@ -463,27 +489,41 @@ function systemPrompt(protagonist, directive) {
     directive.trim() ? `
 OPERATOR DIRECTIVE:
 ${directive.trim()}` : ""
-  ].join("\n");
+  ].join(`
+`);
 }
 async function runWorldAgent(meta, protagonist, transcript, opts) {
+  const card = (opts.cardContext ?? "").trim();
   const messages = [
     { role: "system", content: systemPrompt(protagonist, opts.directive) },
     {
       role: "user",
       content: [
-        "The latest turn of the scene:",
+        card ? [
+          "CHARACTER CARD \u2014 canonical source of truth for the protagonist's basic",
+          "facts (species, appearance, role). Do not contradict it:",
+          '"""',
+          card,
+          '"""',
+          ""
+        ].join(`
+`) : "",
+        "The recent scene (oldest first, most recent turn last):",
         '"""',
         transcript,
         '"""',
         "",
-        "List the entities, then make the edits this turn warrants. Begin."
-      ].join("\n")
+        "List the entities, then make the edits this turn warrants. Record only facts",
+        "present in the card or scene above; if a basic attribute is not stated, omit",
+        "it rather than guess. Begin."
+      ].filter(Boolean).join(`
+`)
     }
   ];
   const toolCalls = [];
   let rounds = 0;
   let finalNote = "";
-  for (; rounds < opts.maxRounds; rounds++) {
+  for (;rounds < opts.maxRounds; rounds++) {
     const res = await spindle.generate.quiet({
       type: "quiet",
       messages,
@@ -528,12 +568,12 @@ async function runWorldAgent(meta, protagonist, transcript, opts) {
 }
 
 // src/backend.ts
-var DEFAULT_CONFIG = { enabled: true, maxRounds: 6, directive: "", agentTimeoutMs: 6e4 };
+var DEFAULT_CONFIG = { enabled: true, maxRounds: 6, directive: "", agentTimeoutMs: 60000 };
 var CONFIG_PATH = "config.json";
 var config = { ...DEFAULT_CONFIG };
-var chatChar = /* @__PURE__ */ new Map();
-var running = /* @__PURE__ */ new Set();
-var observers = /* @__PURE__ */ new Map();
+var chatChar = new Map;
+var running = new Set;
+var observers = new Map;
 async function loadConfig() {
   config = await spindle.storage.getJson(CONFIG_PATH, { fallback: { ...DEFAULT_CONFIG } });
 }
@@ -555,7 +595,8 @@ async function characterForChat(chatId, userId) {
   try {
     const chat = await spindle.chats.get(chatId, userId);
     const cid = chat?.character_id;
-    if (!cid) return null;
+    if (!cid)
+      return null;
     chatChar.set(chatId, cid);
     const c = await spindle.characters.get(cid, userId);
     return c ? { id: c.id, name: c.name } : { id: cid, name: "the character" };
@@ -563,40 +604,65 @@ async function characterForChat(chatId, userId) {
     return null;
   }
 }
+var HISTORY_MESSAGES = 8;
 async function buildTranscript(chatId, reply) {
-  let lastUser = "";
+  const lines = [];
   try {
     const msgs = await spindle.chat.getMessages(chatId);
-    for (let i = msgs.length - 1; i >= 0; i--) {
-      if (msgs[i].role === "user") {
-        lastUser = typeof msgs[i].content === "string" ? msgs[i].content : JSON.stringify(msgs[i].content);
-        break;
-      }
+    for (const m of msgs.slice(-HISTORY_MESSAGES)) {
+      const text = typeof m.content === "string" ? m.content : JSON.stringify(m.content);
+      if (!text.trim())
+        continue;
+      lines.push(`${m.role === "user" ? "PLAYER" : "CHARACTER"}:
+${text.trim()}`);
     }
-  } catch {
+  } catch {}
+  const r = reply.trim();
+  if (r && !(lines.length && lines[lines.length - 1].includes(r))) {
+    lines.push(`CHARACTER:
+${r}`);
   }
-  return [lastUser ? `PLAYER:
-${lastUser}` : "", `
-CHARACTER:
-${reply}`].join("\n").trim();
+  return lines.join(`
+
+`).trim();
+}
+function buildCardContext(char) {
+  const c = char ?? {};
+  const cap = (s, n) => s.length > n ? `${s.slice(0, n)}\u2026` : s;
+  const fields = [
+    ["Name", c.name, 200],
+    ["Description", c.description, 2000],
+    ["Personality", c.personality, 1000],
+    ["Scenario", c.scenario, 1000],
+    ["Opening", c.first_mes, 1500]
+  ];
+  return fields.filter(([, v]) => typeof v === "string" && v.trim()).map(([k, v, n]) => `${k}: ${cap(v.trim(), n)}`).join(`
+
+`);
 }
 async function runAgentForChat(chatId, reply, userId) {
-  if (!config.enabled || !reply.trim()) return;
+  if (!config.enabled || !reply.trim())
+    return;
   const char = await characterForChat(chatId, userId);
-  if (!char) return;
-  if (running.has(char.id)) return;
+  if (!char)
+    return;
+  if (running.has(char.id))
+    return;
   running.add(char.id);
   try {
     const meta = await loadMeta(char.id);
     await ensureWorldBook(meta, userId);
     const transcript = await buildTranscript(chatId, reply);
+    const fullChar = await spindle.characters.get(char.id, userId).catch(() => null);
+    const cardContext = buildCardContext(fullChar);
     const before = JSON.stringify(meta.entries);
     const signal = AbortSignal.timeout(config.agentTimeoutMs);
     const result = await runWorldAgent(meta, char.name, transcript, {
       maxRounds: config.maxRounds,
       directive: config.directive,
       signal,
-      userId
+      userId,
+      cardContext
     });
     await saveMeta(char.id, meta);
     const changed = JSON.stringify(meta.entries) !== before || result.toolCalls.length > 0;
@@ -608,9 +674,7 @@ async function runAgentForChat(chatId, reply, userId) {
       edits: result.toolCalls.length,
       note: result.finalNote
     });
-    spindle.log.info(
-      `[worldforge] ${char.name}: ${result.toolCalls.length} edits / ${result.rounds} rounds${changed ? "" : " (no-op)"}`
-    );
+    spindle.log.info(`[worldforge] ${char.name}: ${result.toolCalls.length} edits / ${result.rounds} rounds${changed ? "" : " (no-op)"}`);
   } catch (err) {
     const msg = err instanceof Error && err.name === "AbortError" ? "agent timed out" : String(err);
     spindle.log.error(`[worldforge] agent failed: ${msg}`);
@@ -619,7 +683,8 @@ async function runAgentForChat(chatId, reply, userId) {
   }
 }
 function ensureObserver(chatId) {
-  if (!observers.has(chatId)) observers.set(chatId, spindle.generate.observe(chatId));
+  if (!observers.has(chatId))
+    observers.set(chatId, spindle.generate.observe(chatId));
   return observers.get(chatId);
 }
 function dropObserver(chatId) {
@@ -630,22 +695,27 @@ function dropObserver(chatId) {
   }
 }
 spindle.on("GENERATION_STARTED", (payload) => {
-  if (!config.enabled || !payload.chatId) return;
+  if (!config.enabled || !payload.chatId)
+    return;
   ensureObserver(payload.chatId);
 });
 spindle.on("GENERATION_ENDED", async (payload, userId) => {
-  if (!config.enabled || !payload.chatId) return;
+  if (!config.enabled || !payload.chatId)
+    return;
   const chatId = payload.chatId;
-  if (payload.error) return dropObserver(chatId);
+  if (payload.error)
+    return dropObserver(chatId);
   const gt = payload.generationType;
-  if (gt === "impersonate" || gt === "quiet") return dropObserver(chatId);
+  if (gt === "impersonate" || gt === "quiet")
+    return dropObserver(chatId);
   const obs = observers.get(chatId);
   const reply = (payload.content ?? obs?.content ?? "").trim();
   dropObserver(chatId);
   await runAgentForChat(chatId, reply, userId);
 });
 spindle.on("GENERATION_STOPPED", async (payload, userId) => {
-  if (!config.enabled || !payload.chatId) return;
+  if (!config.enabled || !payload.chatId)
+    return;
   const obs = observers.get(payload.chatId);
   const reply = (payload.content ?? obs?.content ?? "").trim();
   dropObserver(payload.chatId);
@@ -657,7 +727,8 @@ async function activeCharacter(payloadCid, userId) {
     return c ? { id: c.id, name: c.name } : null;
   }
   const active = await spindle.chats.getActive(userId);
-  if (!active) return null;
+  if (!active)
+    return null;
   return characterForChat(active.id, userId);
 }
 async function snapshot(cid, userId) {
@@ -672,8 +743,7 @@ async function snapshot(cid, userId) {
         content = entry.content;
         keys = entry.key;
       }
-    } catch {
-    }
+    } catch {}
     entities.push({ id, kind: e.kind, name: e.name, onstage: e.onstage, status: e.status, private: Boolean(e.private), audience: e.audience ?? [], keys, content });
   }
   return {
@@ -693,7 +763,7 @@ spindle.onFrontendMessage(async (payload, userId) => {
         enabled: Boolean(payload.config?.enabled ?? config.enabled),
         maxRounds: clampInt(payload.config?.maxRounds ?? config.maxRounds, 1, 20),
         directive: String(payload.config?.directive ?? config.directive),
-        agentTimeoutMs: clampInt(payload.config?.agentTimeoutMs ?? config.agentTimeoutMs, 5e3, 3e5)
+        agentTimeoutMs: clampInt(payload.config?.agentTimeoutMs ?? config.agentTimeoutMs, 5000, 300000)
       };
       await saveConfig();
       spindle.sendToFrontend({ type: "config", config }, userId);
@@ -709,16 +779,19 @@ spindle.onFrontendMessage(async (payload, userId) => {
     }
     case "save_entity": {
       const char = await activeCharacter(payload.characterId, userId);
-      if (!char || !payload.entity?.id) break;
+      if (!char || !payload.entity?.id)
+        break;
       const meta = await loadMeta(char.id);
       const e = meta.entries[payload.entity.id];
       if (e) {
         const patch = {};
-        if (typeof payload.entity.content === "string") patch.content = payload.entity.content;
+        if (typeof payload.entity.content === "string")
+          patch.content = payload.entity.content;
         if (typeof payload.entity.name === "string") {
           e.name = payload.entity.name;
         }
-        if (Object.keys(patch).length) await spindle.world_books.entries.update(payload.entity.id, patch, userId);
+        if (Object.keys(patch).length)
+          await spindle.world_books.entries.update(payload.entity.id, patch, userId);
         await saveMeta(char.id, meta);
       }
       spindle.sendToFrontend({ type: "world", characterName: char.name, snapshot: await snapshot(char.id, userId) }, userId);
@@ -726,13 +799,13 @@ spindle.onFrontendMessage(async (payload, userId) => {
     }
     case "delete_entity": {
       const char = await activeCharacter(payload.characterId, userId);
-      if (!char || !payload.id) break;
+      if (!char || !payload.id)
+        break;
       const meta = await loadMeta(char.id);
       if (meta.entries[payload.id]) {
         try {
           await spindle.world_books.entries.delete(payload.id, userId);
-        } catch {
-        }
+        } catch {}
         delete meta.entries[payload.id];
         await saveMeta(char.id, meta);
       }
@@ -741,7 +814,8 @@ spindle.onFrontendMessage(async (payload, userId) => {
     }
     case "reset_world": {
       const char = await activeCharacter(payload.characterId, userId);
-      if (!char) break;
+      if (!char)
+        break;
       const meta = await loadMeta(char.id);
       if (meta.worldBookId) {
         try {
@@ -749,29 +823,61 @@ spindle.onFrontendMessage(async (payload, userId) => {
           const remaining = (c?.world_book_ids ?? []).filter((b) => b !== meta.worldBookId);
           await spindle.characters.update(char.id, { world_book_ids: remaining, extensions: { worldforge: {} } }, userId);
           await spindle.world_books.delete(meta.worldBookId, userId);
-        } catch {
-        }
+        } catch {}
       }
       await saveMeta(char.id, emptyMeta(char.id));
       spindle.sendToFrontend({ type: "world", characterName: char.name, snapshot: await snapshot(char.id, userId) }, userId);
+      break;
+    }
+    case "reclassify_all_public": {
+      const char = await activeCharacter(payload.characterId, userId);
+      if (!char)
+        break;
+      const meta = await loadMeta(char.id);
+      let changed = 0;
+      for (const [id, e] of Object.entries(meta.entries)) {
+        if (!e.private)
+          continue;
+        try {
+          const entry = await spindle.world_books.entries.get(id, userId);
+          if (!entry)
+            continue;
+          const current = entry.extensions?.["worldforge"] ?? {};
+          await spindle.world_books.entries.update(id, { extensions: { worldforge: { kind: current.kind ?? e.kind, private: false, audience: [] } } }, userId);
+          e.private = false;
+          e.audience = [];
+          e.updatedAt = Date.now();
+          changed++;
+        } catch {}
+      }
+      meta.updatedAt = Date.now();
+      await saveMeta(char.id, meta);
+      spindle.log.info(`[worldforge] reclassified ${changed} entries as public for ${char.id}`);
+      spindle.sendToFrontend({ type: "world", characterName: char.name, snapshot: await snapshot(char.id, userId), note: `Reclassified ${changed} entries as public.` }, userId);
       break;
     }
   }
 });
 function clampInt(v, min, max) {
   const n = Math.round(Number(v));
-  if (!Number.isFinite(n)) return min;
+  if (!Number.isFinite(n))
+    return min;
   return Math.max(min, Math.min(max, n));
 }
 spindle.registerWorldInfoInterceptor(async (ctx) => {
-  if (!config.enabled) return;
+  if (!config.enabled)
+    return;
   const active = ctx.characterId;
-  if (!active) return;
+  if (!active)
+    return;
   const isProtagonist = true;
   const disabled = [];
   for (const entry of ctx.entries) {
     const aw = readAwareness(entry.extensions);
-    if (!aw || !aw.private) continue;
+    if (!aw || !aw.private)
+      continue;
+    if (!aw.audience || aw.audience.length === 0)
+      continue;
     if (!isVisibleTo(aw, active, isProtagonist)) {
       disabled.push(entry.id);
     }

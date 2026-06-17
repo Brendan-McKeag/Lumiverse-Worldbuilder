@@ -43,6 +43,21 @@ function systemPrompt(protagonist: string, directive: string): string {
     '  • When two NPCs interact away from the player, or a faction makes a move, call',
     '    offscreen_scene with the participants so it persists and shapes later turns.',
     '',
+    'FIDELITY — never invent basic facts. This is the most important rule.',
+    'Every concrete attribute you record — species, sex, age, name, appearance,',
+    'role, relationships, location — MUST be traceable to the CHARACTER CARD or the',
+    'scene text you were given. If a fact has not been established anywhere, LEAVE',
+    'IT OUT; do not guess a plausible-sounding detail to fill the gap. A wrong',
+    '"fact" is far worse than a missing one — it becomes canon and the world drifts',
+    'away from the story (e.g. recording a deer character as a rabbit).',
+    '  • Before you revise an existing entity, call read_entity and PRESERVE what is',
+    '    already established. Change a recorded fact only when the scene explicitly',
+    '    changes it — never because you re-guessed it from a vague mention.',
+    '  • The CHARACTER CARD provided below is the source of truth for the',
+    '    protagonist\'s own basic traits. Copy them faithfully; never override them.',
+    '  • If the scene only implies something ambiguously, prefer to omit it or keep',
+    '    the existing value rather than commit to a guess.',
+    '',
     'PUBLIC vs PRIVATE knowledge — get this right or the world breaks.',
     '',
     'The DEFAULT is PUBLIC. Public means "this is how the world is, observable by',
@@ -96,20 +111,36 @@ export async function runWorldAgent(
     directive: string
     signal?: AbortSignal
     userId?: string
+    cardContext?: string
   },
 ): Promise<AgentResult> {
+  const card = (opts.cardContext ?? '').trim()
   const messages: LlmMessage[] = [
     { role: 'system', content: systemPrompt(protagonist, opts.directive) },
     {
       role: 'user',
       content: [
-        'The latest turn of the scene:',
+        card
+          ? [
+              'CHARACTER CARD — canonical source of truth for the protagonist\'s basic',
+              'facts (species, appearance, role). Do not contradict it:',
+              '"""',
+              card,
+              '"""',
+              '',
+            ].join('\n')
+          : '',
+        'The recent scene (oldest first, most recent turn last):',
         '"""',
         transcript,
         '"""',
         '',
-        'List the entities, then make the edits this turn warrants. Begin.',
-      ].join('\n'),
+        'List the entities, then make the edits this turn warrants. Record only facts',
+        'present in the card or scene above; if a basic attribute is not stated, omit',
+        'it rather than guess. Begin.',
+      ]
+        .filter(Boolean)
+        .join('\n'),
     },
   ]
 
