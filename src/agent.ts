@@ -96,8 +96,11 @@ function systemPrompt(protagonist: string, directive: string): string {
     'freely (rewrite, delete, replace) as canon evolves. Keep keywords specific enough',
     'that entries activate when relevant but not constantly.',
     '',
-    'Be economical: make the edits this turn warrants, then stop. When you have no',
-    'more edits, reply with a one-line summary and no tool calls.',
+    'You are given the whole story each run, but do NOT rewrite the world from',
+    'scratch every turn. Be economical: make the edits the latest developments',
+    'warrant, plus fix any existing entry that now conflicts with established',
+    'canon, then stop. When you have no more edits, reply with a one-line summary',
+    'and no tool calls.',
     directive.trim() ? `\nOPERATOR DIRECTIVE:\n${directive.trim()}` : '',
   ].join('\n')
 }
@@ -130,14 +133,16 @@ export async function runWorldAgent(
               '',
             ].join('\n')
           : '',
-        'The recent scene (oldest first, most recent turn last):',
+        'The FULL story so far (oldest first, most recent turn last):',
         '"""',
         transcript,
         '"""',
         '',
-        'List the entities, then make the edits this turn warrants. Record only facts',
-        'present in the card or scene above; if a basic attribute is not stated, omit',
-        'it rather than guess. Begin.',
+        'List the entities, then reconcile the world against the ENTIRE story above:',
+        'add what is now established, advance what changed this turn, and CORRECT any',
+        'existing entry that conflicts with the story (e.g. a wrong species). Record',
+        'only facts present in the card or story; if a basic attribute is not stated,',
+        'omit it rather than guess. Begin.',
       ]
         .filter(Boolean)
         .join('\n'),

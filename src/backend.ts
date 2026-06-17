@@ -71,16 +71,18 @@ async function characterForChat(
 
 /* --------------------- post-turn world agent ----------------------- */
 
-// How many recent messages to feed the agent. One turn is not enough: basic
-// facts (a character's species, a place's name) are often established earlier
-// and never restated, so a single-turn window forces the agent to confabulate.
-const HISTORY_MESSAGES = 8
+// The agent reconciles the world against the ENTIRE story to date, not a recent
+// window — facts established anywhere in the history must be honored. A single
+// safety valve bounds pathologically long stories (see clampTranscript): we keep
+// the opening (where characters/places are first established) and the most recent
+// turns, eliding only the middle, so early facts and current state both survive.
+const MAX_TRANSCRIPT_CHARS = 120_000
 
 async function buildTranscript(chatId: string, reply: string): Promise<string> {
   const lines: string[] = []
   try {
     const msgs = await spindle.chat.getMessages(chatId)
-    for (const m of msgs.slice(-HISTORY_MESSAGES)) {
+    for (const m of msgs) {
       const text = typeof m.content === 'string' ? m.content : JSON.stringify(m.content)
       if (!text.trim()) continue
       lines.push(`${m.role === 'user' ? 'PLAYER' : 'CHARACTER'}:\n${text.trim()}`)
@@ -94,7 +96,17 @@ async function buildTranscript(chatId: string, reply: string): Promise<string> {
   if (r && !(lines.length && lines[lines.length - 1].includes(r))) {
     lines.push(`CHARACTER:\n${r}`)
   }
-  return lines.join('\n\n').trim()
+  return clampTranscript(lines.join('\n\n').trim())
+}
+
+// Keep the whole story when it fits; otherwise preserve head + tail and elide the
+// middle. The opening turns establish the durable facts (species, names, places)
+// the agent must not contradict, and the tail carries current state.
+function clampTranscript(t: string): string {
+  if (t.length <= MAX_TRANSCRIPT_CHARS) return t
+  const head = Math.floor(MAX_TRANSCRIPT_CHARS * 0.4)
+  const tail = MAX_TRANSCRIPT_CHARS - head
+  return `${t.slice(0, head)}\n\n[… middle of the story elided for length; opening and recent turns shown in full …]\n\n${t.slice(-tail)}`
 }
 
 // The character card is the canonical source of truth for the protagonist's
