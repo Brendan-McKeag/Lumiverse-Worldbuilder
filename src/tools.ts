@@ -200,7 +200,11 @@ async function createEntry(
       depth: 4,
       constant: Boolean(opts.constant),
       selective: false,
-      disabled: false,
+      // Disabled AT REST. WorldForge entries only inject while the extension is
+      // running, via the world-info interceptor voting them `enabled`. So when
+      // the extension is unloaded/disabled, the native pipeline sees them
+      // disabled and the prompt returns to normal — no teardown hook required.
+      disabled: true,
       order_value: 100,
       priority: kind === 'lore' || kind === 'faction' ? 20 : 10,
       extensions: { [WF_EXT]: awareness },

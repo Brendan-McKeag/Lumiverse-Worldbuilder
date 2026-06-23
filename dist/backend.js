@@ -234,7 +234,7 @@ async function createEntry(meta, kind, name, content, aliases, opts, userId) {
     depth: 4,
     constant: Boolean(opts.constant),
     selective: false,
-    disabled: false,
+    disabled: true,
     order_value: 100,
     priority: kind === "lore" || kind === "faction" ? 20 : 10,
     extensions: { [WF_EXT]: awareness }
@@ -881,31 +881,46 @@ function clampInt(v, min, max) {
   return Math.max(min, Math.min(max, n));
 }
 spindle.registerWorldInfoInterceptor(async (ctx) => {
-  if (!config.enabled) {
-    const ours = ctx.entries.filter((e) => readAwareness(e.extensions)).map((e) => e.id);
-    return ours.length ? { disabled: ours } : undefined;
-  }
+  if (!config.enabled)
+    return;
   const active = ctx.characterId;
   if (!active)
     return;
   const isProtagonist = true;
-  const disabled = [];
+  const enabled = [];
   for (const entry of ctx.entries) {
     const aw = readAwareness(entry.extensions);
-    if (!aw || !aw.private)
+    if (!aw)
       continue;
-    if (!aw.audience || aw.audience.length === 0)
-      continue;
-    if (!isVisibleTo(aw, active, isProtagonist)) {
-      disabled.push(entry.id);
-    }
+    const visible = !aw.private || !aw.audience || aw.audience.length === 0 || isVisibleTo(aw, active, isProtagonist);
+    if (visible)
+      enabled.push(entry.id);
   }
-  if (disabled.length) {
-    spindle.log.info(`[worldforge] knowledge gate: hid ${disabled.length} private entr(ies) from ${active}`);
-  }
-  return { disabled };
+  return enabled.length ? { enabled } : undefined;
 }, 50);
+async function migrateEntriesToDisabledAtRest() {
+  try {
+    const { data: books } = await spindle.world_books.list({ limit: 1000 });
+    let flipped = 0;
+    for (const book of books) {
+      if (book.metadata?.worldforge !== true)
+        continue;
+      const { data: entries } = await spindle.world_books.entries.list(book.id, { limit: 1000 });
+      for (const e of entries) {
+        if (!readAwareness(e.extensions) || e.disabled)
+          continue;
+        await spindle.world_books.entries.update(e.id, { disabled: true });
+        flipped++;
+      }
+    }
+    if (flipped)
+      spindle.log.info(`[worldforge] migrated ${flipped} entr(ies) to disabled-at-rest`);
+  } catch (err) {
+    spindle.log.error(`[worldforge] entry migration failed: ${String(err)}`);
+  }
+}
 (async () => {
   await loadConfig();
+  await migrateEntriesToDisabledAtRest();
   spindle.log.info("[worldforge] loaded (World Books mode)");
 })();

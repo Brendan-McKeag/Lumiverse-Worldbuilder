@@ -397,42 +397,62 @@ function clampInt(v: unknown, min: number, max: number): number {
  * a different characterId, and their private entries are keyed to them.
  * ------------------------------------------------------------------ */
 spindle.registerWorldInfoInterceptor(async (ctx) => {
-  // When the extension is disabled, return the prompt to normal: suppress EVERY
-  // WorldForge-owned entry (identified by our `worldforge` extension marker) so
-  // none of our entries are injected. The book stays attached and intact — we
-  // just stop contributing to the prompt until re-enabled.
-  if (!config.enabled) {
-    const ours = ctx.entries.filter((e) => readAwareness(e.extensions)).map((e) => e.id)
-    return ours.length ? { disabled: ours } : undefined
-  }
+  // WorldForge entries are disabled AT REST (see createEntry), so when this
+  // extension isn't running they inject nothing and the prompt is normal. Our
+  // job here, while running, is to vote `enabled` for the entries the active
+  // character is allowed to see — which un-gates them for normal keyword
+  // activation (chunk-loading), NOT force-inject them. Knowledge boundaries are
+  // enforced by simply NOT enabling private entries the character isn't privy to.
+  if (!config.enabled) return // panel toggle off -> leave everything at rest (off)
   const active = ctx.characterId
   if (!active) return
 
-  // Is the active speaker the protagonist card for this chat? If so, entries
-  // whose audience contains the PROTAGONIST token are visible to them.
-  const isProtagonist = true // ctx.characterId is the chat's character card here
+  // The active speaker is the chat's own character card, so entries whose
+  // audience contains the PROTAGONIST token are visible to them.
+  const isProtagonist = true
 
-  const disabled: string[] = []
+  const enabled: string[] = []
   for (const entry of ctx.entries) {
     const aw = readAwareness(entry.extensions)
-    if (!aw || !aw.private) continue // public/untagged -> always allowed
-    // Fail-open safety: a private entry with an empty audience is almost
-    // certainly a tagging mistake. Hiding it from everyone is a worse failure
-    // mode (the model confabulates around missing canon) than briefly leaking
-    // a possibly-secret entry. Treat empty audience as public.
-    if (!aw.audience || aw.audience.length === 0) continue
-    if (!isVisibleTo(aw, active, isProtagonist)) {
-      disabled.push(entry.id)
-    }
+    if (!aw) continue // not a WorldForge entry — leave it alone
+    // Fail-open: an empty-audience private entry is almost certainly a tagging
+    // mistake; treat it as public rather than hide canon from everyone.
+    const visible =
+      !aw.private || !aw.audience || aw.audience.length === 0 || isVisibleTo(aw, active, isProtagonist)
+    if (visible) enabled.push(entry.id)
   }
-  if (disabled.length) {
-    spindle.log.info(`[worldforge] knowledge gate: hid ${disabled.length} private entr(ies) from ${active}`)
-  }
-  return { disabled }
+  return enabled.length ? { enabled } : undefined
 }, 50)
+
+/* --------------------- one-time entry migration -------------------- *
+ * Older worlds created their entries enabled (disabled:false), which meant they
+ * kept injecting through the native pipeline even when this extension was off.
+ * On boot (which only happens while the extension is running), flip every
+ * WorldForge-owned entry to disabled-at-rest so the on/off guarantee holds. The
+ * interceptor re-enables the visible ones each generation. Idempotent.
+ * ------------------------------------------------------------------ */
+async function migrateEntriesToDisabledAtRest() {
+  try {
+    const { data: books } = await spindle.world_books.list({ limit: 1000 })
+    let flipped = 0
+    for (const book of books) {
+      if (book.metadata?.worldforge !== true) continue
+      const { data: entries } = await spindle.world_books.entries.list(book.id, { limit: 1000 })
+      for (const e of entries) {
+        if (!readAwareness(e.extensions) || e.disabled) continue
+        await spindle.world_books.entries.update(e.id, { disabled: true })
+        flipped++
+      }
+    }
+    if (flipped) spindle.log.info(`[worldforge] migrated ${flipped} entr(ies) to disabled-at-rest`)
+  } catch (err) {
+    spindle.log.error(`[worldforge] entry migration failed: ${String(err)}`)
+  }
+}
 
 /* ------------------------------- boot ------------------------------ */
 ;(async () => {
   await loadConfig()
+  await migrateEntriesToDisabledAtRest()
   spindle.log.info('[worldforge] loaded (World Books mode)')
 })()
