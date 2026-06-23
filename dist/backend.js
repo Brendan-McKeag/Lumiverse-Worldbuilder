@@ -881,8 +881,10 @@ function clampInt(v, min, max) {
   return Math.max(min, Math.min(max, n));
 }
 spindle.registerWorldInfoInterceptor(async (ctx) => {
-  if (!config.enabled)
-    return;
+  if (!config.enabled) {
+    const ours = ctx.entries.filter((e) => readAwareness(e.extensions)).map((e) => e.id);
+    return ours.length ? { disabled: ours } : undefined;
+  }
   const active = ctx.characterId;
   if (!active)
     return;

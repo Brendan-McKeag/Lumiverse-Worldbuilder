@@ -397,7 +397,14 @@ function clampInt(v: unknown, min: number, max: number): number {
  * a different characterId, and their private entries are keyed to them.
  * ------------------------------------------------------------------ */
 spindle.registerWorldInfoInterceptor(async (ctx) => {
-  if (!config.enabled) return
+  // When the extension is disabled, return the prompt to normal: suppress EVERY
+  // WorldForge-owned entry (identified by our `worldforge` extension marker) so
+  // none of our entries are injected. The book stays attached and intact — we
+  // just stop contributing to the prompt until re-enabled.
+  if (!config.enabled) {
+    const ours = ctx.entries.filter((e) => readAwareness(e.extensions)).map((e) => e.id)
+    return ours.length ? { disabled: ours } : undefined
+  }
   const active = ctx.characterId
   if (!active) return
 
